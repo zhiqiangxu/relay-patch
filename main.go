@@ -1,0 +1,241 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/oklog/run"
+	sdk "github.com/polynetwork/poly-go-sdk"
+	"github.com/zhiqiangxu/relay-patch/config"
+	"github.com/zhiqiangxu/relay-patch/pkg/log"
+	"github.com/zhiqiangxu/relay-patch/pkg/relay"
+	"github.com/zhiqiangxu/relay-patch/pkg/tools"
+)
+
+var confFile string
+var tx string
+var chain uint64
+var phase int
+
+func init() {
+	flag.StringVar(&confFile, "conf", "./config.json", "configuration file path")
+	flag.StringVar(&tx, "tx", "", "specify tx hash")
+	flag.Uint64Var(&chain, "chain", 0, "specify chain ID")
+	flag.IntVar(&phase, "phase", 0, "specify cross chain phase:(0 or 1)")
+
+	flag.Parse()
+}
+
+func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) ([]*ethclient.Client, *tools.EthKeyStore) {
+	var clients []*ethclient.Client
+	for _, node := range ethConfig.RestURL {
+		client, err := ethclient.Dial(node)
+		if err != nil {
+			log.Fatal(fmt.Sprintf("ethclient.Dial failed:%v", err))
+		}
+
+		clients = append(clients, client)
+	}
+
+	chainID, err := clients[0].ChainID(context.Background())
+	if err != nil {
+		log.Fatal(fmt.Sprintf("clients[0].ChainID failed:%v", err))
+	}
+
+	ks := tools.NewEthKeyStore(ethConfig.KeyStorePath, ethConfig.KeyStorePwdSet, chainID)
+
+	return clients, ks
+}
+
+func setUpEthToPoly(ethToPolyCh chan string, polyToEthChs map[uint64]chan string, polySdk *sdk.PolySdk,
+	signer *sdk.Account,
+	clients []*ethclient.Client,
+	ethConfig *config.EthConfig) []*relay.EthToPoly {
+
+	var workers []*relay.EthToPoly
+	for i := 0; i < 5; i++ {
+		workers = append(workers, relay.NewEthToPoly(ethToPolyCh, polyToEthChs, polySdk, signer, clients, ethConfig))
+	}
+
+	return workers
+}
+
+func setUpPolyToEth(clients []*ethclient.Client, ks *tools.EthKeyStore, polyToEthWorkCh chan string, polySdk *sdk.PolySdk, ethConfig *config.EthConfig, polyConfig *config.PolyConfig) []*relay.PolyToEth {
+
+	var workers []*relay.PolyToEth
+	for _, account := range ks.GetAccounts() {
+		worker := relay.NewPolyToEth(polyToEthWorkCh, polySdk, clients, ethConfig, polyConfig, account, ks)
+		workers = append(workers, worker)
+	}
+
+	return workers
+}
+
+func main() {
+	conf, err := config.LoadConfig(confFile)
+	if err != nil {
+		log.Fatal("LoadConfig fail", err)
+	}
+
+	{
+		confBytes, _ := json.MarshalIndent(conf, "", "    ")
+		fmt.Println("conf", string(confBytes))
+	}
+
+	polySdk := sdk.NewPolySdk()
+	err = setUpPoly(polySdk, conf.PolyConfig.RestURL)
+	if err != nil {
+		log.Fatalf("setUpPoly failed: %v", err)
+	}
+
+	wallet, err := polySdk.OpenWallet(conf.PolyConfig.WalletFile)
+	if err != nil {
+		log.Fatalf("polySdk.OpenWallet failed: %v", err)
+	}
+	signer, err := wallet.GetDefaultAccount([]byte(conf.PolyConfig.WalletPwd))
+	if err != nil {
+		log.Fatalf("wallet.GetDefaultAccount failed: %v", err)
+	}
+
+	ethToPolyChs := make(map[uint64]chan string)
+	polyToEthChs := make(map[uint64]chan string)
+	ethToPolyChs[conf.BSCConfig.SideChainId] = make(chan string)
+	ethToPolyChs[conf.HecoConfig.SideChainId] = make(chan string)
+	ethToPolyChs[conf.CurveConfig.SideChainId] = make(chan string)
+
+	polyToEthChs[conf.BSCConfig.SideChainId] = make(chan string)
+	polyToEthChs[conf.HecoConfig.SideChainId] = make(chan string)
+	polyToEthChs[conf.CurveConfig.SideChainId] = make(chan string)
+
+	bscClients, bscKS := setUpEthClientAndKeyStore(&conf.BSCConfig)
+	hecoClients, hecoKS := setUpEthClientAndKeyStore(&conf.HecoConfig)
+	curveClients, curveKS := setUpEthClientAndKeyStore(&conf.CurveConfig)
+
+	bscToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.BSCConfig.SideChainId], polyToEthChs, polySdk, signer, bscClients, &conf.BSCConfig)
+	hecoToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.HecoConfig.SideChainId], polyToEthChs, polySdk, signer, hecoClients, &conf.HecoConfig)
+	curveToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.CurveConfig.SideChainId], polyToEthChs, polySdk, signer, curveClients, &conf.CurveConfig)
+
+	polyToBscWorkers := setUpPolyToEth(bscClients, bscKS, polyToEthChs[conf.BSCConfig.SideChainId], polySdk, &conf.BSCConfig, &conf.PolyConfig)
+	polyToHecoWorkers := setUpPolyToEth(hecoClients, hecoKS, polyToEthChs[conf.HecoConfig.SideChainId], polySdk, &conf.HecoConfig, &conf.PolyConfig)
+	polyToCurveWorkers := setUpPolyToEth(curveClients, curveKS, polyToEthChs[conf.CurveConfig.SideChainId], polySdk, &conf.CurveConfig, &conf.PolyConfig)
+
+	if tx != "" {
+		switch phase {
+		case 0:
+			var targetWorkersForEthToPoly []*relay.EthToPoly
+			switch chain {
+			case conf.BSCConfig.SideChainId:
+				targetWorkersForEthToPoly = bscToPolyWorkers
+			case conf.HecoConfig.SideChainId:
+				targetWorkersForEthToPoly = hecoToPolyWorkers
+			case conf.CurveConfig.SideChainId:
+				targetWorkersForEthToPoly = curveToPolyWorkers
+			default:
+				log.Fatalf("unsupported chainID:%d", chain)
+			}
+
+			toChainID, txHash := targetWorkersForEthToPoly[0].MonitorTx(tx)
+
+			if txHash == "" {
+				return
+			}
+			var targetWorkersForPolyToEth []*relay.PolyToEth
+			switch toChainID {
+			case conf.BSCConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToBscWorkers
+			case conf.HecoConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToHecoWorkers
+			case conf.CurveConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToCurveWorkers
+			default:
+				log.Fatalf("unsupported chainID:%d", toChainID)
+			}
+
+			targetWorkersForPolyToEth[0].SendTx(txHash)
+		case 1:
+			var targetWorkersForPolyToEth []*relay.PolyToEth
+			switch chain {
+			case conf.BSCConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToBscWorkers
+			case conf.HecoConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToHecoWorkers
+			case conf.CurveConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToCurveWorkers
+			default:
+				log.Fatalf("unsupported chainID:%d", chain)
+			}
+
+			targetWorkersForPolyToEth[0].SendTx(tx)
+		default:
+			log.Fatalf("invalid phase:%d", phase)
+		}
+
+	} else {
+		var g run.Group
+		for _, worker := range bscToPolyWorkers {
+			g.Add(func() error {
+				worker.Start()
+				return nil
+			}, func(error) {
+				worker.Stop()
+			})
+		}
+		for _, worker := range hecoToPolyWorkers {
+			g.Add(func() error {
+				worker.Start()
+				return nil
+			}, func(error) {
+				worker.Stop()
+			})
+		}
+		for _, worker := range polyToBscWorkers {
+			g.Add(func() error {
+				worker.Start()
+				return nil
+			}, func(error) {
+				worker.Stop()
+			})
+		}
+		for _, worker := range polyToHecoWorkers {
+			g.Add(func() error {
+				worker.Start()
+				return nil
+			}, func(error) {
+				worker.Stop()
+			})
+		}
+
+		go func() {
+			err := g.Run()
+			log.Fatalf("run.Group finished:%v", err)
+			for _, workCh := range ethToPolyChs {
+				close(workCh)
+			}
+			for _, workCh := range polyToEthChs {
+				close(workCh)
+			}
+		}()
+
+		for _, workCh := range ethToPolyChs {
+			<-workCh
+		}
+		for _, workCh := range polyToEthChs {
+			<-workCh
+		}
+		return
+	}
+
+}
+
+func setUpPoly(poly *sdk.PolySdk, rpcAddr string) error {
+	poly.NewRpcClient().SetAddress(rpcAddr)
+	hdr, err := poly.GetHeaderByHeight(0)
+	if err != nil {
+		return err
+	}
+	poly.SetChainId(hdr.ChainID)
+	return nil
+}
