@@ -22,6 +22,7 @@ import (
 	"github.com/ontio/ontology-crypto/signature"
 	vconfig "github.com/ontio/ontology/consensus/vbft/config"
 	sdk "github.com/polynetwork/poly-go-sdk"
+	sdkcom "github.com/polynetwork/poly-go-sdk/common"
 	common1 "github.com/polynetwork/poly/common"
 	polytypes "github.com/polynetwork/poly/core/types"
 	common2 "github.com/polynetwork/poly/native/service/cross_chain_manager/common"
@@ -89,6 +90,46 @@ func (ctx *PolyToEth) Stop() {
 	close(ctx.doneCh)
 }
 
+func GetKeyParams(polySdk *sdk.PolySdk, polyConfig *config.PolyConfig, polyTxHash string, polyTxHeight uint32) (*common2.ToMerkleValue, []byte, *sdkcom.SmartContactEvent) {
+	polyEvt, err := polySdk.GetSmartContractEvent(polyTxHash)
+	if err != nil {
+		log.Fatalf("polySdk.GetSmartContractEvent failed:%v poly_hash:%s", err, polyTxHash)
+	}
+
+	if polyTxHeight == 0 {
+		polyTxHeight, err = polySdk.GetBlockHeightByTxHash(polyTxHash)
+		if err != nil {
+			log.Fatalf("polySdk.GetBlockHeightByTxHash failed:%v poly_hash:%s", err, polyTxHash)
+		}
+	}
+
+	for _, notify := range polyEvt.Notify {
+		if notify.ContractAddress == polyConfig.EntranceContractAddress {
+			states := notify.States.([]interface{})
+			method, _ := states[0].(string)
+			if method != "makeProof" {
+				continue
+			}
+
+			proof, err := polySdk.GetCrossStatesProof(polyTxHeight, states[5].(string))
+			if err != nil {
+				log.Errorf("polySdk.GetCrossStatesProof - failed to get proof for key %s: %v", states[5].(string), err)
+				continue
+			}
+			auditpath, _ := hex.DecodeString(proof.AuditPath)
+			value, _, _, _ := tools.ParseAuditpath(auditpath)
+			param := &common2.ToMerkleValue{}
+			if err := param.Deserialization(common1.NewZeroCopySource(value)); err != nil {
+				log.Errorf("failed to deserialize MakeTxParam (value: %x, err: %v)", value, err)
+				continue
+			}
+
+			return param, auditpath, polyEvt
+		}
+	}
+	return nil, nil, nil
+}
+
 func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 	polySdk := ctx.polySdk
 	polyEvt, err := polySdk.GetSmartContractEvent(polyTxHash)
@@ -103,12 +144,12 @@ func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 
 	polyEpochHeight := ctx.findLatestPolyEpochHeight()
 
-	hdr, err := polySdk.GetHeaderByHeight(polyTxHeight)
+	hdr, err := polySdk.GetHeaderByHeight(polyTxHeight + 1)
 	if err != nil {
 		log.Fatal(fmt.Sprintf("polySdk.GetHeaderByHeight failed:%v", err))
 	}
 
-	isCurr := polyEpochHeight <= polyTxHeight-1
+	isCurr := polyEpochHeight <= polyTxHeight
 	isEpoch, _, err := ctx.isHeaderEpoch(hdr)
 	if err != nil {
 		log.Fatalf("isHeaderEpoch failed: %v", err)
@@ -121,48 +162,32 @@ func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 
 	if !isCurr {
 		anchor, _ = polySdk.GetHeaderByHeight(polyEpochHeight + 1)
-		proof, _ := polySdk.GetMerkleProof(polyTxHeight, polyEpochHeight+1)
+		proof, _ := polySdk.GetMerkleProof(polyTxHeight+1, polyEpochHeight+1)
 		hp = proof.AuditPath
 	} else if isEpoch {
-		anchor, _ = polySdk.GetHeaderByHeight(polyTxHeight + 1)
-		proof, _ := polySdk.GetMerkleProof(polyTxHeight, polyTxHeight+1)
+		anchor, _ = polySdk.GetHeaderByHeight(polyTxHeight + 2)
+		proof, _ := polySdk.GetMerkleProof(polyTxHeight+1, polyTxHeight+2)
 		hp = proof.AuditPath
 	}
 
-	for _, notify := range polyEvt.Notify {
-		if notify.ContractAddress == ctx.polyConfig.EntranceContractAddress {
-			states := notify.States.([]interface{})
-			method, _ := states[0].(string)
-			if method != "makeProof" {
-				continue
-			}
-
-			if uint64(states[2].(float64)) != ctx.ethConfig.SideChainId {
-				continue
-			}
-
-			proof, err := polySdk.GetCrossStatesProof(hdr.Height-1, states[5].(string))
-			if err != nil {
-				log.Errorf("polySdk.GetCrossStatesProof - failed to get proof for key %s: %v", states[5].(string), err)
-				continue
-			}
-			auditpath, _ := hex.DecodeString(proof.AuditPath)
-			value, _, _, _ := tools.ParseAuditpath(auditpath)
-			param := &common2.ToMerkleValue{}
-			if err := param.Deserialization(common1.NewZeroCopySource(value)); err != nil {
-				log.Errorf("failed to deserialize MakeTxParam (value: %x, err: %v)", value, err)
-				continue
-			}
-
-			if !isPaid(param) {
-				log.Infof("%v skipped because not paid", polyEvt.TxHash)
-				continue
-			}
-
-			return ctx.makeTx(hdr, param, hp, anchor, auditpath)
-		}
+	merkleValue, auditpath, polyEvt := GetKeyParams(ctx.polySdk, ctx.polyConfig, polyTxHash, polyTxHeight)
+	if merkleValue == nil {
+		log.Errorf("MerkleValue empty for poly_hash %s", polyTxHash)
+		return nil
 	}
-	return nil
+
+	if merkleValue.MakeTxParam.ToChainID != ctx.ethConfig.SideChainId {
+		log.Errorf("ignored because ToChainID not match for poly_hash %s, got %d expect %d", polyTxHash, merkleValue.MakeTxParam.ToChainID, ctx.ethConfig.SideChainId)
+		return nil
+	}
+
+	if !isPaid(merkleValue) {
+		log.Infof("%v skipped because not paid", polyEvt.TxHash)
+		return nil
+	}
+
+	return ctx.makeTx(hdr, merkleValue, hp, anchor, auditpath)
+
 }
 
 func (ctx *PolyToEth) findLatestPolyEpochHeight() uint32 {
@@ -260,6 +285,7 @@ func (ctx *PolyToEth) makeTx(header *polytypes.Header, param *common2.ToMerkleVa
 	if res {
 		log.Infof("already relayed to sidechain: ( from_chain_id: %d, from_txhash: %x,  param.Txhash: %x)",
 			param.FromChainID, param.TxHash, param.MakeTxParam.TxHash)
+		return nil
 	}
 
 	rawProof, _ := hex.DecodeString(headerProof)
@@ -283,7 +309,7 @@ func (ctx *PolyToEth) makeTx(header *polytypes.Header, param *common2.ToMerkleVa
 }
 
 func (ctx *PolyToEth) SendTx(polyTxHash string) {
-	log.Infof("SendTx %s", polyTxHash)
+	log.Infof("SendTx %s ToChainID %d", polyTxHash, ctx.ethConfig.SideChainId)
 
 	idx := randIdx(len(ctx.clients))
 	ctx.idx = idx
@@ -324,7 +350,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	hash := signedtx.Hash()
 	isSuccess := waitTransactionConfirm(client, polyTxHash, hash)
 	if isSuccess {
-		log.Infof("successful to relay tx to ethereum: (eth_hash: %s, nonce: %d, poly_hash)",
+		log.Infof("successful to relay tx to ethereum: (eth_hash: %s, nonce: %d, poly_hash: %s)",
 			hash.String(), nonce, polyTxHash)
 	} else {
 		log.Errorf("failed to relay tx to ethereum: (eth_hash: %s, nonce: %d, poly_hash: %s)",

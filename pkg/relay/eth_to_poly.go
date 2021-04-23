@@ -32,21 +32,20 @@ import (
 
 // EthToPoly ...
 type EthToPoly struct {
-	ethToPolyCh  chan string
-	polyToEthChs map[uint64]chan string
-	doneCh       chan struct{}
-	polySdk      *sdk.PolySdk
-	signer       *sdk.Account
-	clients      []*ethclient.Client
-	ethConfig    *config.EthConfig
-	idx          int
+	ethToPolyCh chan string
+	doneCh      chan struct{}
+	polySdk     *sdk.PolySdk
+	signer      *sdk.Account
+	clients     []*ethclient.Client
+	ethConfig   *config.EthConfig
+	idx         int
 }
 
-func NewEthToPoly(ethToPolyCh chan string, polyToEthChs map[uint64]chan string, polySdk *sdk.PolySdk,
+func NewEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	signer *sdk.Account,
 	clients []*ethclient.Client,
 	ethConfig *config.EthConfig) *EthToPoly {
-	return &EthToPoly{ethToPolyCh: ethToPolyCh, polyToEthChs: polyToEthChs, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, ethConfig: ethConfig}
+	return &EthToPoly{ethToPolyCh: ethToPolyCh, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, ethConfig: ethConfig}
 }
 
 func (chain *EthToPoly) Start() {
@@ -58,14 +57,9 @@ func (chain *EthToPoly) Start() {
 			}
 
 			toChainID, polyTxHash := chain.MonitorTx(txHash)
+
 			if polyTxHash != "" {
-				if _, ok := chain.polyToEthChs[toChainID]; ok {
-					select {
-					case chain.polyToEthChs[toChainID] <- polyTxHash:
-					case <-chain.doneCh:
-						return
-					}
-				}
+				log.Infof("relayed tx %s on chain %d to chain %d with poly hash %s", txHash, chain.ethConfig.SideChainId, toChainID, polyTxHash)
 			}
 		case <-chain.doneCh:
 			return
@@ -79,7 +73,7 @@ func (chain *EthToPoly) Stop() {
 }
 
 func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
-	log.Infof("MonitorTx %s", ethTxHash)
+	log.Infof("MonitorTx %s FromChainID %d", ethTxHash, chain.ethConfig.SideChainId)
 	idx := randIdx(len(chain.clients))
 	chain.idx = idx
 	client := chain.clients[idx]
@@ -113,8 +107,9 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 				append(append([]byte(cross_chain_manager.DONE_TX), utils.GetUint64Bytes(chain.ethConfig.SideChainId)...), param.CrossChainID...))
 
 			if len(raw) != 0 {
-				log.Infof("ccid %s (tx_hash: %s) already on poly",
-					hex.EncodeToString(param.CrossChainID), evt.Raw.TxHash.Hex())
+				log.Infof("ccid %s (tx_hash: %s to_chainid: %d) already on poly",
+					hex.EncodeToString(param.CrossChainID), evt.Raw.TxHash.Hex(), param.ToChainID)
+				return param.ToChainID, ""
 			} else {
 				txIDBig := big.NewInt(0)
 				txIDBig.SetBytes(evt.TxId)

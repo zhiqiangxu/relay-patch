@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/oklog/run"
@@ -18,13 +19,11 @@ import (
 var confFile string
 var tx string
 var chain uint64
-var phase int
 
 func init() {
 	flag.StringVar(&confFile, "conf", "./config.json", "configuration file path")
 	flag.StringVar(&tx, "tx", "", "specify tx hash")
 	flag.Uint64Var(&chain, "chain", 0, "specify chain ID")
-	flag.IntVar(&phase, "phase", 0, "specify cross chain phase:(0 or 1)")
 
 	flag.Parse()
 }
@@ -50,14 +49,14 @@ func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) ([]*ethclient.Client
 	return clients, ks
 }
 
-func setUpEthToPoly(ethToPolyCh chan string, polyToEthChs map[uint64]chan string, polySdk *sdk.PolySdk,
+func setUpEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	signer *sdk.Account,
 	clients []*ethclient.Client,
 	ethConfig *config.EthConfig) []*relay.EthToPoly {
 
 	var workers []*relay.EthToPoly
 	for i := 0; i < 5; i++ {
-		workers = append(workers, relay.NewEthToPoly(ethToPolyCh, polyToEthChs, polySdk, signer, clients, ethConfig))
+		workers = append(workers, relay.NewEthToPoly(ethToPolyCh, polySdk, signer, clients, ethConfig))
 	}
 
 	return workers
@@ -114,64 +113,70 @@ func main() {
 	hecoClients, hecoKS := setUpEthClientAndKeyStore(&conf.HecoConfig)
 	curveClients, curveKS := setUpEthClientAndKeyStore(&conf.CurveConfig)
 
-	bscToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.BSCConfig.SideChainId], polyToEthChs, polySdk, signer, bscClients, &conf.BSCConfig)
-	hecoToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.HecoConfig.SideChainId], polyToEthChs, polySdk, signer, hecoClients, &conf.HecoConfig)
-	curveToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.CurveConfig.SideChainId], polyToEthChs, polySdk, signer, curveClients, &conf.CurveConfig)
+	bscToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.BSCConfig.SideChainId], polySdk, signer, bscClients, &conf.BSCConfig)
+	hecoToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.HecoConfig.SideChainId], polySdk, signer, hecoClients, &conf.HecoConfig)
+	curveToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.CurveConfig.SideChainId], polySdk, signer, curveClients, &conf.CurveConfig)
 
 	polyToBscWorkers := setUpPolyToEth(bscClients, bscKS, polyToEthChs[conf.BSCConfig.SideChainId], polySdk, &conf.BSCConfig, &conf.PolyConfig)
 	polyToHecoWorkers := setUpPolyToEth(hecoClients, hecoKS, polyToEthChs[conf.HecoConfig.SideChainId], polySdk, &conf.HecoConfig, &conf.PolyConfig)
 	polyToCurveWorkers := setUpPolyToEth(curveClients, curveKS, polyToEthChs[conf.CurveConfig.SideChainId], polySdk, &conf.CurveConfig, &conf.PolyConfig)
 
 	if tx != "" {
-		switch phase {
+		var (
+			targetWorkersForEthToPoly []*relay.EthToPoly
+			targetWorkersForPolyToEth []*relay.PolyToEth
+			toChainID                 uint64
+			polyTxHash                string
+		)
+		switch chain {
+		case conf.BSCConfig.SideChainId:
+			targetWorkersForEthToPoly = bscToPolyWorkers
+		case conf.HecoConfig.SideChainId:
+			targetWorkersForEthToPoly = hecoToPolyWorkers
+		case conf.CurveConfig.SideChainId:
+			targetWorkersForEthToPoly = curveToPolyWorkers
 		case 0:
-			var targetWorkersForEthToPoly []*relay.EthToPoly
-			switch chain {
-			case conf.BSCConfig.SideChainId:
-				targetWorkersForEthToPoly = bscToPolyWorkers
-			case conf.HecoConfig.SideChainId:
-				targetWorkersForEthToPoly = hecoToPolyWorkers
-			case conf.CurveConfig.SideChainId:
-				targetWorkersForEthToPoly = curveToPolyWorkers
-			default:
-				log.Fatalf("unsupported chainID:%d", chain)
+			// handle poly tx hash
+			merkleValue, _, _ := relay.GetKeyParams(polySdk, &conf.PolyConfig, tx, 0)
+			if merkleValue == nil {
+				log.Errorf("merkle value empty for poly hash %s", tx)
 			}
-
-			toChainID, txHash := targetWorkersForEthToPoly[0].MonitorTx(tx)
-
-			if txHash == "" {
-				return
-			}
-			var targetWorkersForPolyToEth []*relay.PolyToEth
-			switch toChainID {
-			case conf.BSCConfig.SideChainId:
-				targetWorkersForPolyToEth = polyToBscWorkers
-			case conf.HecoConfig.SideChainId:
-				targetWorkersForPolyToEth = polyToHecoWorkers
-			case conf.CurveConfig.SideChainId:
-				targetWorkersForPolyToEth = polyToCurveWorkers
-			default:
-				log.Fatalf("unsupported chainID:%d", toChainID)
-			}
-
-			targetWorkersForPolyToEth[0].SendTx(txHash)
-		case 1:
-			var targetWorkersForPolyToEth []*relay.PolyToEth
-			switch chain {
-			case conf.BSCConfig.SideChainId:
-				targetWorkersForPolyToEth = polyToBscWorkers
-			case conf.HecoConfig.SideChainId:
-				targetWorkersForPolyToEth = polyToHecoWorkers
-			case conf.CurveConfig.SideChainId:
-				targetWorkersForPolyToEth = polyToCurveWorkers
-			default:
-				log.Fatalf("unsupported chainID:%d", chain)
-			}
-
-			targetWorkersForPolyToEth[0].SendTx(tx)
+			toChainID = merkleValue.MakeTxParam.ToChainID
+			polyTxHash = tx
+			goto HANDLE_POLY_TX
 		default:
-			log.Fatalf("invalid phase:%d", phase)
+			log.Fatalf("unsupported chainID:%d", chain)
 		}
+
+		toChainID, polyTxHash = targetWorkersForEthToPoly[0].MonitorTx(tx)
+
+		if polyTxHash == "" {
+			return
+		}
+
+	HANDLE_POLY_TX:
+
+		log.Infof("toChainID:%d poly hash:%s", toChainID, polyTxHash)
+
+		polyTxHeight, err := polySdk.GetBlockHeightByTxHash(polyTxHash)
+		if err != nil {
+			log.Fatal(fmt.Sprintf("polySdk.GetBlockHeightByTxHash failed:%v", err))
+		}
+
+		waitPolyHeight(polySdk, polyTxHeight+1)
+
+		switch toChainID {
+		case conf.BSCConfig.SideChainId:
+			targetWorkersForPolyToEth = polyToBscWorkers
+		case conf.HecoConfig.SideChainId:
+			targetWorkersForPolyToEth = polyToHecoWorkers
+		case conf.CurveConfig.SideChainId:
+			targetWorkersForPolyToEth = polyToCurveWorkers
+		default:
+			log.Fatalf("unsupported chainID:%d", toChainID)
+		}
+
+		targetWorkersForPolyToEth[0].SendTx(polyTxHash)
 
 	} else {
 		var g run.Group
@@ -230,12 +235,27 @@ func main() {
 
 }
 
-func setUpPoly(poly *sdk.PolySdk, rpcAddr string) error {
-	poly.NewRpcClient().SetAddress(rpcAddr)
-	hdr, err := poly.GetHeaderByHeight(0)
+func setUpPoly(polySdk *sdk.PolySdk, rpcAddr string) error {
+	polySdk.NewRpcClient().SetAddress(rpcAddr)
+	hdr, err := polySdk.GetHeaderByHeight(0)
 	if err != nil {
 		return err
 	}
-	poly.SetChainId(hdr.ChainID)
+	polySdk.SetChainId(hdr.ChainID)
 	return nil
+}
+
+func waitPolyHeight(polySdk *sdk.PolySdk, height uint32) {
+	for {
+		currentHeight, err := polySdk.GetCurrentBlockHeight()
+		if err != nil {
+			log.Fatalf("polySdk.GetCurrentBlockHeight failed:%v", err)
+		}
+		if currentHeight >= height {
+			break
+		}
+		log.Infof("wait poly height:%d, current height:%d", height, currentHeight)
+		time.Sleep(time.Second)
+	}
+
 }
