@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -123,117 +124,121 @@ func main() {
 	polyToCurveWorkers := setUpPolyToEth(curveClients, curveKS, polyToEthChs[conf.CurveConfig.SideChainId], polySdk, &conf.CurveConfig, &conf.PolyConfig)
 
 	if tx != "" {
-		var (
-			targetWorkersForEthToPoly []*relay.EthToPoly
-			targetWorkersForPolyToEth []*relay.PolyToEth
-			toChainID                 uint64
-			polyTxHash                string
-		)
-		switch chain {
-		case conf.BSCConfig.SideChainId:
-			targetWorkersForEthToPoly = bscToPolyWorkers
-		case conf.HecoConfig.SideChainId:
-			targetWorkersForEthToPoly = hecoToPolyWorkers
-		case conf.CurveConfig.SideChainId:
-			targetWorkersForEthToPoly = curveToPolyWorkers
-		case 0:
-			// handle poly tx hash
-			merkleValue, _, _ := relay.GetKeyParams(polySdk, &conf.PolyConfig, tx, 0)
-			if merkleValue == nil {
-				log.Errorf("merkle value empty for poly hash %s", tx)
+		txes := strings.Split(tx, ",")
+		for _, txHash := range txes {
+			var (
+				targetWorkersForEthToPoly []*relay.EthToPoly
+				targetWorkersForPolyToEth []*relay.PolyToEth
+				toChainID                 uint64
+				polyTxHash                string
+			)
+			switch chain {
+			case conf.BSCConfig.SideChainId:
+				targetWorkersForEthToPoly = bscToPolyWorkers
+			case conf.HecoConfig.SideChainId:
+				targetWorkersForEthToPoly = hecoToPolyWorkers
+			case conf.CurveConfig.SideChainId:
+				targetWorkersForEthToPoly = curveToPolyWorkers
+			case 0:
+				// handle poly tx hash
+				merkleValue, _, _ := relay.GetKeyParams(polySdk, &conf.PolyConfig, txHash, 0)
+				if merkleValue == nil {
+					log.Errorf("merkle value empty for poly hash %s", tx)
+				}
+				toChainID = merkleValue.MakeTxParam.ToChainID
+				polyTxHash = txHash
+				goto HANDLE_POLY_TX
+			default:
+				log.Fatalf("unsupported chainID:%d", chain)
 			}
-			toChainID = merkleValue.MakeTxParam.ToChainID
-			polyTxHash = tx
-			goto HANDLE_POLY_TX
-		default:
-			log.Fatalf("unsupported chainID:%d", chain)
-		}
 
-		toChainID, polyTxHash = targetWorkersForEthToPoly[0].MonitorTx(tx)
+			toChainID, polyTxHash = targetWorkersForEthToPoly[0].MonitorTx(txHash)
 
-		if polyTxHash == "" {
-			return
-		}
-
-	HANDLE_POLY_TX:
-
-		log.Infof("toChainID:%d poly hash:%s", toChainID, polyTxHash)
-
-		polyTxHeight, err := polySdk.GetBlockHeightByTxHash(polyTxHash)
-		if err != nil {
-			log.Fatal(fmt.Sprintf("polySdk.GetBlockHeightByTxHash failed:%v", err))
-		}
-
-		waitPolyHeight(polySdk, polyTxHeight+1)
-
-		switch toChainID {
-		case conf.BSCConfig.SideChainId:
-			targetWorkersForPolyToEth = polyToBscWorkers
-		case conf.HecoConfig.SideChainId:
-			targetWorkersForPolyToEth = polyToHecoWorkers
-		case conf.CurveConfig.SideChainId:
-			targetWorkersForPolyToEth = polyToCurveWorkers
-		default:
-			log.Fatalf("unsupported chainID:%d", toChainID)
-		}
-
-		targetWorkersForPolyToEth[0].SendTx(polyTxHash)
-
-	} else {
-		var g run.Group
-		for _, worker := range bscToPolyWorkers {
-			g.Add(func() error {
-				worker.Start()
-				return nil
-			}, func(error) {
-				worker.Stop()
-			})
-		}
-		for _, worker := range hecoToPolyWorkers {
-			g.Add(func() error {
-				worker.Start()
-				return nil
-			}, func(error) {
-				worker.Stop()
-			})
-		}
-		for _, worker := range polyToBscWorkers {
-			g.Add(func() error {
-				worker.Start()
-				return nil
-			}, func(error) {
-				worker.Stop()
-			})
-		}
-		for _, worker := range polyToHecoWorkers {
-			g.Add(func() error {
-				worker.Start()
-				return nil
-			}, func(error) {
-				worker.Stop()
-			})
-		}
-
-		go func() {
-			err := g.Run()
-			log.Fatalf("run.Group finished:%v", err)
-			for _, workCh := range ethToPolyChs {
-				close(workCh)
+			if polyTxHash == "" {
+				return
 			}
-			for _, workCh := range polyToEthChs {
-				close(workCh)
-			}
-		}()
 
-		for _, workCh := range ethToPolyChs {
-			<-workCh
+		HANDLE_POLY_TX:
+
+			log.Infof("toChainID:%d poly hash:%s", toChainID, polyTxHash)
+
+			polyTxHeight, err := polySdk.GetBlockHeightByTxHash(polyTxHash)
+			if err != nil {
+				log.Fatal(fmt.Sprintf("polySdk.GetBlockHeightByTxHash failed:%v", err))
+			}
+
+			waitPolyHeight(polySdk, polyTxHeight+1)
+
+			switch toChainID {
+			case conf.BSCConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToBscWorkers
+			case conf.HecoConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToHecoWorkers
+			case conf.CurveConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToCurveWorkers
+			default:
+				log.Fatalf("unsupported chainID:%d", toChainID)
+			}
+
+			targetWorkersForPolyToEth[0].SendTx(polyTxHash)
 		}
-		for _, workCh := range polyToEthChs {
-			<-workCh
-		}
+
 		return
+
 	}
 
+	var g run.Group
+	for _, worker := range bscToPolyWorkers {
+		g.Add(func() error {
+			worker.Start()
+			return nil
+		}, func(error) {
+			worker.Stop()
+		})
+	}
+	for _, worker := range hecoToPolyWorkers {
+		g.Add(func() error {
+			worker.Start()
+			return nil
+		}, func(error) {
+			worker.Stop()
+		})
+	}
+	for _, worker := range polyToBscWorkers {
+		g.Add(func() error {
+			worker.Start()
+			return nil
+		}, func(error) {
+			worker.Stop()
+		})
+	}
+	for _, worker := range polyToHecoWorkers {
+		g.Add(func() error {
+			worker.Start()
+			return nil
+		}, func(error) {
+			worker.Stop()
+		})
+	}
+
+	go func() {
+		err := g.Run()
+		log.Fatalf("run.Group finished:%v", err)
+		for _, workCh := range ethToPolyChs {
+			close(workCh)
+		}
+		for _, workCh := range polyToEthChs {
+			close(workCh)
+		}
+	}()
+
+	for _, workCh := range ethToPolyChs {
+		<-workCh
+	}
+	for _, workCh := range polyToEthChs {
+		<-workCh
+	}
+	return
 }
 
 func setUpPoly(polySdk *sdk.PolySdk, rpcAddr string) error {
