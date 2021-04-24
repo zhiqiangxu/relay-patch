@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"time"
@@ -39,10 +38,12 @@ func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) ([]*ethclient.Client
 		clients = append(clients, client)
 	}
 
+	start := time.Now()
 	chainID, err := clients[0].ChainID(context.Background())
 	if err != nil {
 		log.Fatal(fmt.Sprintf("clients[0].ChainID failed:%v", err))
 	}
+	log.Infof("SideChain %d ChainID() took %v", ethConfig.SideChainId, time.Now().Sub(start).String())
 
 	ks := tools.NewEthKeyStore(ethConfig.KeyStorePath, ethConfig.KeyStorePwdSet, chainID)
 
@@ -79,10 +80,10 @@ func main() {
 		log.Fatal("LoadConfig fail", err)
 	}
 
-	{
-		confBytes, _ := json.MarshalIndent(conf, "", "    ")
-		fmt.Println("conf", string(confBytes))
-	}
+	// {
+	// 	confBytes, _ := json.MarshalIndent(conf, "", "    ")
+	// 	fmt.Println("conf", string(confBytes))
+	// }
 
 	polySdk := sdk.NewPolySdk()
 	err = setUpPoly(polySdk, conf.PolyConfig.RestURL)

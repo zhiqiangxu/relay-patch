@@ -174,7 +174,7 @@ func (chain *EthToPoly) commitProof(height uint32, proof []byte, value []byte, t
 		[]byte{},
 		chain.signer)
 	if err != nil {
-		log.Fatal("ImportOuterTransfer failed:%v", err)
+		log.Fatalf("ImportOuterTransfer failed:%v", err)
 	}
 
 	log.Infof("commitProof - send transaction to poly chain: ( poly_txhash: %s, eth_txhash: %s, height: %d )",

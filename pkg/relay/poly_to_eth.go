@@ -350,11 +350,11 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	hash := signedtx.Hash()
 	isSuccess := waitTransactionConfirm(client, polyTxHash, hash)
 	if isSuccess {
-		log.Infof("successful to relay tx to ethereum: (eth_hash: %s, nonce: %d, poly_hash: %s)",
-			hash.String(), nonce, polyTxHash)
+		log.Infof("successful to relay tx to ethereum: (eth_hash: %s, account: %s, nonce: %d, poly_hash: %s)",
+			hash.String(), ctx.account.Address.Hex(), nonce, polyTxHash)
 	} else {
-		log.Errorf("failed to relay tx to ethereum: (eth_hash: %s, nonce: %d, poly_hash: %s)",
-			hash.String(), nonce, polyTxHash)
+		log.Errorf("failed to relay tx to ethereum: (eth_hash: %s, account: %s, nonce: %d, poly_hash: %s)",
+			hash.String(), ctx.account.Address.Hex(), nonce, polyTxHash)
 	}
 }
 
