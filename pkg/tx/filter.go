@@ -69,8 +69,10 @@ func (f *Filter) Start() {
 		break
 	}
 
+	log.Infof("all jobs done, quiting")
 	time.Sleep(time.Second * 60)
-	log.Infof("all jobs done, quit")
+	log.Infof("all jobs done, quited")
+
 }
 
 // Stop ...
