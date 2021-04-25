@@ -2,3 +2,5 @@
 *.json
 *.dat
 keystore
+Log
+.DS_Store

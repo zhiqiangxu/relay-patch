@@ -78,6 +78,9 @@ func setUpPolyToEth(clients []*ethclient.Client, ks *tools.EthKeyStore, polyToEt
 }
 
 func main() {
+
+	log.InitLog(log.InfoLog, "./Log/", log.Stdout)
+
 	conf, err := config.LoadConfig(confFile)
 	if err != nil {
 		log.Fatal("LoadConfig fail", err)
