@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -60,10 +61,29 @@ func (chain *EthToPoly) Start() {
 
 			if polyTxHash != "" {
 				log.Infof("relayed tx %s on chain %d to chain %d with poly hash %s", txHash, chain.ethConfig.SideChainId, toChainID, polyTxHash)
+			} else {
+				waitPolyTxConfirm(polyTxHash, chain.polySdk)
 			}
 		case <-chain.doneCh:
 			return
 		}
+
+	}
+}
+
+func waitPolyTxConfirm(polyTxHash string, polySdk *sdk.PolySdk) {
+	for {
+		time.Sleep(time.Second)
+		tx, err := polySdk.GetTransaction(polyTxHash)
+		if err != nil {
+			log.Infof("waiting poly_hash %s", polyTxHash)
+			continue
+		}
+		if tx == nil {
+			log.Errorf("poly_hash %s not exists", polyTxHash)
+			continue
+		}
+		break
 
 	}
 }
