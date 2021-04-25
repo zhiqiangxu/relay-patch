@@ -49,6 +49,8 @@ func (f *Filter) Start() {
 			break
 		}
 
+		log.Infof("found %d cross tx", len(list))
+
 		var wg sync.WaitGroup
 		for _, crossTx := range list {
 			if crossTx.PolyTxHash == "" {
