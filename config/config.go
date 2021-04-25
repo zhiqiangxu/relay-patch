@@ -11,6 +11,7 @@ type Config struct {
 	PolyConfig  PolyConfig
 	CurveConfig EthConfig
 	BSCConfig   EthConfig
+	EthConfig   EthConfig
 	HecoConfig  EthConfig
 }
 

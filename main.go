@@ -111,22 +111,27 @@ func main() {
 	ethToPolyChs[conf.BSCConfig.SideChainId] = make(chan string)
 	ethToPolyChs[conf.HecoConfig.SideChainId] = make(chan string)
 	ethToPolyChs[conf.CurveConfig.SideChainId] = make(chan string)
+	ethToPolyChs[conf.EthConfig.SideChainId] = make(chan string)
 
 	polyToEthChs[conf.BSCConfig.SideChainId] = make(chan string)
 	polyToEthChs[conf.HecoConfig.SideChainId] = make(chan string)
 	polyToEthChs[conf.CurveConfig.SideChainId] = make(chan string)
+	polyToEthChs[conf.EthConfig.SideChainId] = make(chan string)
 
 	bscClients, bscKS := setUpEthClientAndKeyStore(&conf.BSCConfig)
 	hecoClients, hecoKS := setUpEthClientAndKeyStore(&conf.HecoConfig)
 	curveClients, curveKS := setUpEthClientAndKeyStore(&conf.CurveConfig)
+	ethClients, ethKS := setUpEthClientAndKeyStore(&conf.EthConfig)
 
 	bscToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.BSCConfig.SideChainId], polySdk, signer, bscClients, &conf.BSCConfig)
 	hecoToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.HecoConfig.SideChainId], polySdk, signer, hecoClients, &conf.HecoConfig)
 	curveToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.CurveConfig.SideChainId], polySdk, signer, curveClients, &conf.CurveConfig)
+	ethToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.EthConfig.SideChainId], polySdk, signer, ethClients, &conf.EthConfig)
 
 	polyToBscWorkers := setUpPolyToEth(bscClients, bscKS, polyToEthChs[conf.BSCConfig.SideChainId], polySdk, &conf.BSCConfig, &conf.PolyConfig)
 	polyToHecoWorkers := setUpPolyToEth(hecoClients, hecoKS, polyToEthChs[conf.HecoConfig.SideChainId], polySdk, &conf.HecoConfig, &conf.PolyConfig)
 	polyToCurveWorkers := setUpPolyToEth(curveClients, curveKS, polyToEthChs[conf.CurveConfig.SideChainId], polySdk, &conf.CurveConfig, &conf.PolyConfig)
+	polyToEthWorkers := setUpPolyToEth(ethClients, ethKS, polyToEthChs[conf.EthConfig.SideChainId], polySdk, &conf.EthConfig, &conf.PolyConfig)
 
 	if tx != "" {
 		txes := strings.Split(tx, ",")
@@ -144,6 +149,8 @@ func main() {
 				targetWorkersForEthToPoly = hecoToPolyWorkers
 			case conf.CurveConfig.SideChainId:
 				targetWorkersForEthToPoly = curveToPolyWorkers
+			case conf.EthConfig.SideChainId:
+				targetWorkersForEthToPoly = ethToPolyWorkers
 			case 0:
 				// handle poly tx hash
 				merkleValue, _, _ := relay.GetKeyParams(polySdk, &conf.PolyConfig, txHash, 0)
@@ -181,6 +188,8 @@ func main() {
 				targetWorkersForPolyToEth = polyToHecoWorkers
 			case conf.CurveConfig.SideChainId:
 				targetWorkersForPolyToEth = polyToCurveWorkers
+			case conf.EthConfig.SideChainId:
+				targetWorkersForPolyToEth = polyToEthWorkers
 			default:
 				log.Fatalf("unsupported chainID:%d", toChainID)
 			}
@@ -208,7 +217,7 @@ func main() {
 		filter.Stop()
 	})
 
-	toPolyWorkers := append(append(bscToPolyWorkers, hecoToPolyWorkers...), curveToPolyWorkers...)
+	toPolyWorkers := append(append(append(bscToPolyWorkers, hecoToPolyWorkers...), curveToPolyWorkers...), ethToPolyWorkers...)
 	for i := range toPolyWorkers {
 		worker := toPolyWorkers[i]
 		g.Add(func() error {
@@ -218,7 +227,7 @@ func main() {
 			worker.Stop()
 		})
 	}
-	fromPolyWorkers := append(append(polyToBscWorkers, polyToHecoWorkers...), polyToCurveWorkers...)
+	fromPolyWorkers := append(append(append(polyToBscWorkers, polyToHecoWorkers...), polyToCurveWorkers...), polyToEthWorkers...)
 	for i := range fromPolyWorkers {
 		worker := fromPolyWorkers[i]
 		g.Add(func() error {
