@@ -56,11 +56,22 @@ func (f *Filter) Start() {
 			if crossTx.PolyTxHash == "" {
 				targetCh := f.ethToPolyChs[crossTx.SrcChainID]
 				if targetCh == nil {
-					log.Fatalf("targetCh not found for chain:%d", crossTx.SrcChainID)
+					log.Fatalf("ethToPoly (src_chain_id %d dst_chain_id %d) targetCh not found for chain:%d", crossTx.SrcChainID, crossTx.DstChainID, crossTx.SrcChainID)
 				}
 				util.GoFunc(&wg, func() {
 					select {
 					case targetCh <- crossTx.SrcTxHash:
+					case <-f.doneCh:
+					}
+				})
+			} else {
+				targetCh := f.polyToEthChs[crossTx.DstChainID]
+				if targetCh == nil {
+					log.Fatalf("polyToEth (src_chain_id %d dst_chain_id %d) targetCh not found for chain:%d", crossTx.SrcChainID, crossTx.DstChainID, crossTx.DstChainID)
+				}
+				util.GoFunc(&wg, func() {
+					select {
+					case targetCh <- crossTx.PolyTxHash:
 					case <-f.doneCh:
 					}
 				})
