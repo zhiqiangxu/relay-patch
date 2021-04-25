@@ -13,7 +13,9 @@ import (
 	"github.com/zhiqiangxu/relay-patch/config"
 	"github.com/zhiqiangxu/relay-patch/pkg/log"
 	"github.com/zhiqiangxu/relay-patch/pkg/relay"
+	"github.com/zhiqiangxu/relay-patch/pkg/storage"
 	"github.com/zhiqiangxu/relay-patch/pkg/tools"
+	txPkg "github.com/zhiqiangxu/relay-patch/pkg/tx"
 )
 
 var confFile string
@@ -187,8 +189,25 @@ func main() {
 
 	}
 
+	mysql, err := storage.NewMySQL(conf.MySQLConfig)
+	if err != nil {
+		log.Fatalf("storage.NewMySQL failed:%v", err)
+	}
+
+	filter := txPkg.NewFilter(mysql, ethToPolyChs, polyToEthChs)
+
 	var g run.Group
-	for _, worker := range bscToPolyWorkers {
+
+	g.Add(func() error {
+		filter.Start()
+		return nil
+	}, func(error) {
+		filter.Stop()
+	})
+
+	toPolyWorkers := append(append(bscToPolyWorkers, hecoToPolyWorkers...), curveToPolyWorkers...)
+	for i := range toPolyWorkers {
+		worker := toPolyWorkers[i]
 		g.Add(func() error {
 			worker.Start()
 			return nil
@@ -196,23 +215,9 @@ func main() {
 			worker.Stop()
 		})
 	}
-	for _, worker := range hecoToPolyWorkers {
-		g.Add(func() error {
-			worker.Start()
-			return nil
-		}, func(error) {
-			worker.Stop()
-		})
-	}
-	for _, worker := range polyToBscWorkers {
-		g.Add(func() error {
-			worker.Start()
-			return nil
-		}, func(error) {
-			worker.Stop()
-		})
-	}
-	for _, worker := range polyToHecoWorkers {
+	fromPolyWorkers := append(append(polyToBscWorkers, polyToHecoWorkers...), polyToCurveWorkers...)
+	for i := range fromPolyWorkers {
+		worker := fromPolyWorkers[i]
 		g.Add(func() error {
 			worker.Start()
 			return nil

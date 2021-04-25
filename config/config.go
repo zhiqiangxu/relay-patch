@@ -7,16 +7,21 @@ import (
 
 // Config ...
 type Config struct {
-	DBConfig    DBConfig
+	MySQLConfig MySQLConfig
 	PolyConfig  PolyConfig
 	CurveConfig EthConfig
 	BSCConfig   EthConfig
 	HecoConfig  EthConfig
 }
 
-// DBConfig ...
-type DBConfig struct {
-	DB string
+// MySQLConfig for mysql
+type MySQLConfig struct {
+	ConnectionString string
+	ConnMaxLifetime  int
+	MaxOpenConn      int
+	MaxIdleConn      int
+	ShowSQL          bool
+	Slaves           []MySQLConfig
 }
 
 // PolyConfig ...
