@@ -52,7 +52,8 @@ func (f *Filter) Start() {
 		log.Infof("found %d cross tx", len(list))
 
 		var wg sync.WaitGroup
-		for _, crossTx := range list {
+		for i := range list {
+			crossTx := list[i]
 			if crossTx.PolyTxHash == "" {
 				targetCh := f.ethToPolyChs[crossTx.SrcChainID]
 				if targetCh == nil {
