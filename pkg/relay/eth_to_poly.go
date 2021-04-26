@@ -60,9 +60,8 @@ func (chain *EthToPoly) Start() {
 			toChainID, polyTxHash := chain.MonitorTx(txHash)
 
 			if polyTxHash != "" {
-				log.Infof("relayed tx %s on chain %d to chain %d with poly hash %s", txHash, chain.ethConfig.SideChainId, toChainID, polyTxHash)
-			} else {
 				waitPolyTxConfirm(polyTxHash, chain.polySdk)
+				log.Infof("relayed tx %s on chain %d to chain %d with poly hash %s", txHash, chain.ethConfig.SideChainId, toChainID, polyTxHash)
 			}
 		case <-chain.doneCh:
 			return
