@@ -332,7 +332,8 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	}
 	gasLimit, err := client.EstimateGas(context.Background(), callMsg)
 	if err != nil {
-		log.Fatalf("client.EstimateGas failed:%v", err)
+		log.Errorf("client.EstimateGas failed:%v", err)
+		return
 	}
 
 	nonce := ctx.getNonce()
