@@ -283,8 +283,8 @@ func (ctx *PolyToEth) makeTx(header *polytypes.Header, param *common2.ToMerkleVa
 	}
 
 	if res {
-		log.Infof("already relayed to sidechain: ( from_chain_id: %d, from_txhash: %x,  param.Txhash: %x)",
-			param.FromChainID, param.TxHash, param.MakeTxParam.TxHash)
+		log.Infof("already relayed to sidechain: ( from_chain_id: %d, to_chain_id: %d, from_txhash: %x,  param.Txhash: %x)",
+			param.FromChainID, param.MakeTxParam.ToChainID, param.TxHash, param.MakeTxParam.TxHash)
 		return nil
 	}
 
