@@ -345,7 +345,8 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 
 	err = client.SendTransaction(context.Background(), signedtx)
 	if err != nil {
-		log.Fatalf("client.SendTransaction failed:%v", err)
+		log.Errorf("client.SendTransaction failed:%v", err)
+		return
 	}
 
 	hash := signedtx.Hash()
