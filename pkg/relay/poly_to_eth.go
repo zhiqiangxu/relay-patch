@@ -315,6 +315,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	ctx.idx = idx
 	client := ctx.clients[idx]
 
+	nonce := ctx.getNonce()
 	txData := ctx.getTxData(polyTxHash)
 	if len(txData) == 0 {
 		return
@@ -336,7 +337,6 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		return
 	}
 
-	nonce := ctx.getNonce()
 	tx := types.NewTransaction(nonce, contractaddr, big.NewInt(0), gasLimit, gasPrice, txData)
 	signedtx, err := ctx.keyStore.SignTransaction(tx, ctx.account)
 	if err != nil {
