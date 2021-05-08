@@ -59,7 +59,7 @@ func (ctx *PolyToEth) getNonce() uint64 {
 	if ctx.nonce == nil {
 		nonce, err := ctx.clients[randIdx(len(ctx.clients))].NonceAt(context.Background(), ctx.account.Address, nil)
 		if err != nil {
-			log.Fatalf("PendingNonceAt failed:%v", err)
+			log.Fatalf("NonceAt failed:%v", err)
 		}
 		ctx.nonce = &nonce
 	}
