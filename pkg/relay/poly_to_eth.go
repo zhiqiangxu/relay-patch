@@ -364,7 +364,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 func waitTransactionConfirm(client *ethclient.Client, polyTxHash string, hash common.Hash) bool {
 	start := time.Now()
 	for {
-		if time.Now().After(start.Add(time.Minute * 3)) {
+		if time.Now().After(start.Add(time.Minute * 1)) {
 			return false
 		}
 		time.Sleep(time.Second * 1)
