@@ -349,7 +349,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 
 	err = client.SendTransaction(txCtx, signedtx)
 	if err != nil {
-		log.Errorf("client.SendTransaction failed:%v", err)
+		log.Errorf("client.SendTransaction failed:%v account:%s", err, ctx.account.Address.Hex())
 		time.Sleep(time.Second * 1)
 		return
 	}
