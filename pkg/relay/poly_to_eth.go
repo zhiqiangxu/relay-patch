@@ -321,7 +321,10 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		return
 	}
 
-	gasPrice, err := client.SuggestGasPrice(context.Background())
+	txCtx, cancelFunc := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancelFunc()
+
+	gasPrice, err := client.SuggestGasPrice(txCtx)
 	if err != nil {
 		log.Fatalf("client.SuggestGasPrice failed:%v", err)
 	}
@@ -332,7 +335,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		From: ctx.account.Address, To: &contractaddr, Gas: 0, GasPrice: gasPrice,
 		Value: big.NewInt(0), Data: txData,
 	}
-	gasLimit, err := client.EstimateGas(context.Background(), callMsg)
+	gasLimit, err := client.EstimateGas(txCtx, callMsg)
 	if err != nil {
 		log.Errorf("client.EstimateGas failed:%v", err)
 		return
@@ -344,7 +347,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		log.Fatalf("keyStore.SignTransaction failed:%v", err)
 	}
 
-	err = client.SendTransaction(context.Background(), signedtx)
+	err = client.SendTransaction(txCtx, signedtx)
 	if err != nil {
 		log.Errorf("client.SendTransaction failed:%v", err)
 		time.Sleep(time.Second * 1)
