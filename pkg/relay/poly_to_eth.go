@@ -321,7 +321,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		return
 	}
 
-	txCtx, cancelFunc := context.WithTimeout(context.Background(), time.Second*10)
+	txCtx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
 	gasPrice, err := client.SuggestGasPrice(txCtx)
