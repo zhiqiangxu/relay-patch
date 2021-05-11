@@ -99,13 +99,13 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 
 	receipt, err := client.TransactionReceipt(context.Background(), common.HexToHash(ethTxHash))
 	if err != nil {
-		log.Fatal(fmt.Sprintf("TransactionReceipt failed:%v", err))
+		log.Fatalf("TransactionReceipt failed:%v", err)
 	}
 	eccmAddr := common.HexToAddress(chain.ethConfig.ECCMContractAddress)
 
 	eccm, err := eccm_abi.NewEthCrossChainManager(eccmAddr, client)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("eccm_abi.NewEthCrossChainManager failed:%v", err))
+		log.Fatalf("eccm_abi.NewEthCrossChainManager failed:%v", err)
 	}
 	for _, elog := range receipt.Logs {
 
@@ -113,13 +113,13 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 
 			evt, err := eccm.ParseCrossChainEvent(*elog)
 			if err != nil {
-				log.Fatal(fmt.Sprintf("eccm.ParseCrossChainEvent failed:%v", err))
+				log.Fatalf("eccm.ParseCrossChainEvent failed:%v", err)
 			}
 
 			param := &common2.MakeTxParam{}
 			err = param.Deserialization(common1.NewZeroCopySource([]byte(evt.Rawdata)))
 			if err != nil {
-				log.Fatal(fmt.Sprintf("param.Deserialization failed:%v", err))
+				log.Fatalf("param.Deserialization failed:%v", err)
 			}
 
 			raw, _ := chain.polySdk.GetStorage(utils.CrossChainManagerContractAddress.ToHexString(),
@@ -137,7 +137,7 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 
 				keyBytes, err := eth.MappingKeyAt(txID, "01")
 				if err != nil {
-					log.Fatal(fmt.Sprintf("eth.MappingKeyAt failed:%v", err))
+					log.Fatalf("eth.MappingKeyAt failed:%v", err)
 				}
 
 				refHeight := chain.findLastestSideChainHeight()
@@ -147,12 +147,12 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 
 				proof, err := tools.GetProof(chain.ethConfig.RestURL[idx], chain.ethConfig.ECCDContractAddress, proofKey, heightHex)
 				if err != nil {
-					log.Fatal(fmt.Sprintf("tools.GetProof failed:%v", err))
+					log.Fatalf("tools.GetProof failed:%v", err)
 				}
 
 				polyTxHash, err := chain.commitProof(uint32(height), proof, evt.Rawdata, txHash)
 				if err != nil {
-					log.Fatal(fmt.Sprintf("commitProof failed:%v", err))
+					log.Fatalf("commitProof failed:%v", err)
 				}
 
 				return evt.ToChainId, polyTxHash
@@ -173,7 +173,7 @@ func (chain *EthToPoly) findLastestSideChainHeight() uint64 {
 	// try to get storage
 	result, err := chain.polySdk.GetStorage(contractAddress.ToHexString(), key)
 	if err != nil {
-		log.Fatalf(fmt.Sprintf("findLastestSideChainHeight failed:%v", err))
+		log.Fatalf("findLastestSideChainHeight failed:%v", err)
 	}
 	if result == nil || len(result) == 0 {
 		return 0

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"strings"
 	"time"
 
@@ -35,7 +34,7 @@ func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) ([]*ethclient.Client
 	for _, node := range ethConfig.RestURL {
 		client, err := ethclient.Dial(node)
 		if err != nil {
-			log.Fatal(fmt.Sprintf("ethclient.Dial failed:%v", err))
+			log.Fatalf("ethclient.Dial failed:%v", err)
 		}
 
 		clients = append(clients, client)
@@ -44,7 +43,7 @@ func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) ([]*ethclient.Client
 	start := time.Now()
 	chainID, err := clients[0].ChainID(context.Background())
 	if err != nil {
-		log.Fatal(fmt.Sprintf("clients[0].ChainID failed:%v", err))
+		log.Fatalf("clients[0].ChainID failed:%v", err)
 	}
 	log.Infof("SideChain %d ChainID() took %v", ethConfig.SideChainId, time.Now().Sub(start).String())
 
@@ -83,7 +82,7 @@ func main() {
 
 	conf, err := config.LoadConfig(confFile)
 	if err != nil {
-		log.Fatal("LoadConfig fail", err)
+		log.Fatalf("LoadConfig fail:%v", err)
 	}
 
 	// {
@@ -176,7 +175,7 @@ func main() {
 
 			polyTxHeight, err := polySdk.GetBlockHeightByTxHash(polyTxHash)
 			if err != nil {
-				log.Fatal(fmt.Sprintf("polySdk.GetBlockHeightByTxHash failed:%v", err))
+				log.Fatalf("polySdk.GetBlockHeightByTxHash failed:%v", err)
 			}
 
 			waitPolyHeight(polySdk, polyTxHeight+1)

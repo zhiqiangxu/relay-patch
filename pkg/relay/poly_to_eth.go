@@ -134,19 +134,19 @@ func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 	polySdk := ctx.polySdk
 	polyEvt, err := polySdk.GetSmartContractEvent(polyTxHash)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("polySdk.GetSmartContractEvent failed:%v", err))
+		log.Fatalf("polySdk.GetSmartContractEvent failed:%v", err)
 	}
 
 	polyTxHeight, err := polySdk.GetBlockHeightByTxHash(polyTxHash)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("polySdk.GetBlockHeightByTxHash failed:%v", err))
+		log.Fatalf("polySdk.GetBlockHeightByTxHash failed:%v", err)
 	}
 
 	polyEpochHeight := ctx.findLatestPolyEpochHeight()
 
 	hdr, err := polySdk.GetHeaderByHeight(polyTxHeight + 1)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("polySdk.GetHeaderByHeight failed:%v", err))
+		log.Fatalf("polySdk.GetHeaderByHeight failed:%v", err)
 	}
 
 	isCurr := polyEpochHeight <= polyTxHeight
