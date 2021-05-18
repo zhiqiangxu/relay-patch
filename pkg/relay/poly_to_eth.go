@@ -201,7 +201,7 @@ func (ctx *PolyToEth) findLatestPolyEpochHeight() uint32 {
 
 	height, err := instance.GetCurEpochStartHeight(nil)
 	if err != nil {
-		log.Fatalf("instance.GetCurEpochStartHeight failed:%v", err)
+		log.Fatalf("PolyToEth instance.GetCurEpochStartHeight failed:%v", err)
 	}
 
 	return uint32(height)

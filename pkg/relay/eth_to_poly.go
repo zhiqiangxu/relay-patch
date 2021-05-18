@@ -236,7 +236,7 @@ func (chain *EthToPoly) findLatestPolyEpochHeight() uint32 {
 
 	height, err := instance.GetCurEpochStartHeight(nil)
 	if err != nil {
-		log.Fatalf("instance.GetCurEpochStartHeight failed:%v", err)
+		log.Fatalf("EthToPoly instance.GetCurEpochStartHeight failed:%v", err)
 	}
 
 	return uint32(height)
