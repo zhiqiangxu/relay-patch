@@ -13,6 +13,7 @@ type Config struct {
 	BSCConfig   EthConfig
 	EthConfig   EthConfig
 	HecoConfig  EthConfig
+	OKConfig    EthConfig
 }
 
 // MySQLConfig for mysql

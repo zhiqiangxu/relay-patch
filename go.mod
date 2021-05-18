@@ -15,3 +15,7 @@ require (
 	github.com/polynetwork/poly-io-test v0.0.0-20200819093740-8cf514b07750 // indirect
 	github.com/zhiqiangxu/util v0.0.0-20210114025214-5f087283a7a6
 )
+
+replace (
+	github.com/ethereum/go-ethereum => github.com/zhiqiangxu/go-ethereum v0.0.0-20210513053854-b16fac27e406
+)

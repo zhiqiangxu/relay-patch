@@ -55,21 +55,22 @@ func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) ([]*ethclient.Client
 func setUpEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	signer *sdk.Account,
 	clients []*ethclient.Client,
-	ethConfig *config.EthConfig) []*relay.EthToPoly {
+	ethConfig *config.EthConfig,
+	conf *config.Config) []*relay.EthToPoly {
 
 	var workers []*relay.EthToPoly
 	for i := 0; i < 5; i++ {
-		workers = append(workers, relay.NewEthToPoly(ethToPolyCh, polySdk, signer, clients, ethConfig))
+		workers = append(workers, relay.NewEthToPoly(ethToPolyCh, polySdk, signer, clients, ethConfig, conf))
 	}
 
 	return workers
 }
 
-func setUpPolyToEth(clients []*ethclient.Client, ks *tools.EthKeyStore, polyToEthWorkCh chan string, polySdk *sdk.PolySdk, ethConfig *config.EthConfig, polyConfig *config.PolyConfig) []*relay.PolyToEth {
+func setUpPolyToEth(clients []*ethclient.Client, ks *tools.EthKeyStore, polyToEthWorkCh chan string, polySdk *sdk.PolySdk, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config) []*relay.PolyToEth {
 
 	var workers []*relay.PolyToEth
 	for _, account := range ks.GetAccounts() {
-		worker := relay.NewPolyToEth(polyToEthWorkCh, polySdk, clients, ethConfig, polyConfig, account, ks)
+		worker := relay.NewPolyToEth(polyToEthWorkCh, polySdk, clients, ethConfig, polyConfig, conf, account, ks)
 		workers = append(workers, worker)
 	}
 
@@ -122,15 +123,15 @@ func main() {
 	curveClients, curveKS := setUpEthClientAndKeyStore(&conf.CurveConfig)
 	ethClients, ethKS := setUpEthClientAndKeyStore(&conf.EthConfig)
 
-	bscToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.BSCConfig.SideChainId], polySdk, signer, bscClients, &conf.BSCConfig)
-	hecoToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.HecoConfig.SideChainId], polySdk, signer, hecoClients, &conf.HecoConfig)
-	curveToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.CurveConfig.SideChainId], polySdk, signer, curveClients, &conf.CurveConfig)
-	ethToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.EthConfig.SideChainId], polySdk, signer, ethClients, &conf.EthConfig)
+	bscToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.BSCConfig.SideChainId], polySdk, signer, bscClients, &conf.BSCConfig, conf)
+	hecoToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.HecoConfig.SideChainId], polySdk, signer, hecoClients, &conf.HecoConfig, conf)
+	curveToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.CurveConfig.SideChainId], polySdk, signer, curveClients, &conf.CurveConfig, conf)
+	ethToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.EthConfig.SideChainId], polySdk, signer, ethClients, &conf.EthConfig, conf)
 
-	polyToBscWorkers := setUpPolyToEth(bscClients, bscKS, polyToEthChs[conf.BSCConfig.SideChainId], polySdk, &conf.BSCConfig, &conf.PolyConfig)
-	polyToHecoWorkers := setUpPolyToEth(hecoClients, hecoKS, polyToEthChs[conf.HecoConfig.SideChainId], polySdk, &conf.HecoConfig, &conf.PolyConfig)
-	polyToCurveWorkers := setUpPolyToEth(curveClients, curveKS, polyToEthChs[conf.CurveConfig.SideChainId], polySdk, &conf.CurveConfig, &conf.PolyConfig)
-	polyToEthWorkers := setUpPolyToEth(ethClients, ethKS, polyToEthChs[conf.EthConfig.SideChainId], polySdk, &conf.EthConfig, &conf.PolyConfig)
+	polyToBscWorkers := setUpPolyToEth(bscClients, bscKS, polyToEthChs[conf.BSCConfig.SideChainId], polySdk, &conf.BSCConfig, &conf.PolyConfig, conf)
+	polyToHecoWorkers := setUpPolyToEth(hecoClients, hecoKS, polyToEthChs[conf.HecoConfig.SideChainId], polySdk, &conf.HecoConfig, &conf.PolyConfig, conf)
+	polyToCurveWorkers := setUpPolyToEth(curveClients, curveKS, polyToEthChs[conf.CurveConfig.SideChainId], polySdk, &conf.CurveConfig, &conf.PolyConfig, conf)
+	polyToEthWorkers := setUpPolyToEth(ethClients, ethKS, polyToEthChs[conf.EthConfig.SideChainId], polySdk, &conf.EthConfig, &conf.PolyConfig, conf)
 
 	if tx != "" {
 		txes := strings.Split(tx, ",")

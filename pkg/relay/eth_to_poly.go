@@ -39,14 +39,16 @@ type EthToPoly struct {
 	signer      *sdk.Account
 	clients     []*ethclient.Client
 	ethConfig   *config.EthConfig
+	conf        *config.Config
 	idx         int
 }
 
 func NewEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	signer *sdk.Account,
 	clients []*ethclient.Client,
-	ethConfig *config.EthConfig) *EthToPoly {
-	return &EthToPoly{ethToPolyCh: ethToPolyCh, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, ethConfig: ethConfig}
+	ethConfig *config.EthConfig,
+	conf *config.Config) *EthToPoly {
+	return &EthToPoly{ethToPolyCh: ethToPolyCh, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, ethConfig: ethConfig, conf: conf}
 }
 
 func (chain *EthToPoly) Start() {
@@ -140,8 +142,7 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 					log.Fatalf("eth.MappingKeyAt failed:%v", err)
 				}
 
-				refHeight := chain.findLastestSideChainHeight()
-				height := int64(refHeight - chain.ethConfig.BlockConfig)
+				height := chain.decideProofHeight()
 				heightHex := hexutil.EncodeBig(big.NewInt(height))
 				proofKey := hexutil.Encode(keyBytes)
 
@@ -162,6 +163,29 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 	}
 
 	return 0, ""
+}
+
+func (chain *EthToPoly) decideProofHeight() int64 {
+	conf := chain.conf
+	switch chain.ethConfig.SideChainId {
+	case conf.CurveConfig.SideChainId, conf.BSCConfig.SideChainId, conf.HecoConfig.SideChainId, conf.EthConfig.SideChainId:
+		return int64(chain.findLastestSideChainHeight() - chain.ethConfig.BlockConfig)
+	case conf.OKConfig.SideChainId:
+		for {
+			height, err := chain.clients[chain.idx].BlockNumber(context.Background())
+			if err != nil {
+				log.Errorf("decideProofHeight fail:%v", err)
+				time.Sleep(time.Second)
+				continue
+			}
+			return int64(height - 3)
+		}
+	default:
+		log.Fatalf("unhandled chain in decideProofHeight:%d", chain.ethConfig.SideChainId)
+		// to quiet ide
+		return 0
+	}
+
 }
 
 func (chain *EthToPoly) findLastestSideChainHeight() uint64 {

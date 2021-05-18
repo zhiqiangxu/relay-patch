@@ -41,14 +41,15 @@ type PolyToEth struct {
 	clients     []*ethclient.Client
 	ethConfig   *config.EthConfig
 	polyConfig  *config.PolyConfig
+	conf        *config.Config
 	account     accounts.Account
 	keyStore    *tools.EthKeyStore
 	nonce       *uint64
 	idx         int
 }
 
-func NewPolyToEth(polyToEthCh chan string, polySdk *sdk.PolySdk, clients []*ethclient.Client, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, account accounts.Account, keyStore *tools.EthKeyStore) *PolyToEth {
-	return &PolyToEth{polyToEthCh: polyToEthCh, doneCh: make(chan struct{}), polySdk: polySdk, clients: clients, ethConfig: ethConfig, polyConfig: polyConfig, account: account, keyStore: keyStore}
+func NewPolyToEth(polyToEthCh chan string, polySdk *sdk.PolySdk, clients []*ethclient.Client, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config, account accounts.Account, keyStore *tools.EthKeyStore) *PolyToEth {
+	return &PolyToEth{polyToEthCh: polyToEthCh, doneCh: make(chan struct{}), polySdk: polySdk, clients: clients, ethConfig: ethConfig, polyConfig: polyConfig, conf: conf, account: account, keyStore: keyStore}
 }
 
 func randIdx(size int) int {
@@ -347,14 +348,13 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		log.Fatalf("keyStore.SignTransaction failed:%v", err)
 	}
 
-	err = client.SendTransaction(timerCtx, signedtx)
+	hash, err := ctx.sendTxAndReturnHash(timerCtx, signedtx)
 	if err != nil {
-		log.Errorf("client.SendTransaction failed:%v account:%s gasPrice:%d idx:%d", err, ctx.account.Address.Hex(), gasPrice.Int64(), idx)
+		log.Errorf("sendTxAndReturnHash failed:%v account:%s gasPrice:%d idx:%d", err, ctx.account.Address.Hex(), gasPrice.Int64(), idx)
 		time.Sleep(time.Second * 1)
 		return
 	}
 
-	hash := signedtx.Hash()
 	isSuccess := waitTransactionConfirm(client, polyTxHash, hash)
 	if isSuccess {
 		log.Infof("successful to relay tx to ethereum: (eth_hash: %s, account: %s, nonce: %d, chain:%d, poly_hash: %s, gasPrice: %d, idx: %d)",
@@ -363,6 +363,23 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		log.Errorf("failed to relay tx to ethereum: (eth_hash: %s, account: %s, nonce: %d, chain:%d, poly_hash: %s, gasPrice: %d, idx: %d)",
 			hash.String(), ctx.account.Address.Hex(), nonce, ctx.ethConfig.SideChainId, polyTxHash, gasPrice.Int64(), idx)
 	}
+}
+
+func (ctx *PolyToEth) sendTxAndReturnHash(timerCtx context.Context, signedtx *types.Transaction) (hash common.Hash, err error) {
+
+	conf := ctx.conf
+	switch ctx.ethConfig.SideChainId {
+	case conf.CurveConfig.SideChainId, conf.BSCConfig.SideChainId, conf.HecoConfig.SideChainId, conf.EthConfig.SideChainId:
+		err = ctx.clients[ctx.idx].SendTransaction(timerCtx, signedtx)
+		if err != nil {
+			log.Errorf("SendTransaction failed:%v, SideChainId:%d idx:%d", err, ctx.ethConfig.SideChainId, ctx.idx)
+			return
+		}
+		hash = signedtx.Hash()
+	case conf.OKConfig.SideChainId:
+		hash, err = ctx.clients[ctx.idx].SendOKTransaction(timerCtx, signedtx)
+	}
+	return
 }
 
 func waitTransactionConfirm(client *ethclient.Client, polyTxHash string, hash common.Hash) bool {
