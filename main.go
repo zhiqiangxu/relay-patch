@@ -20,11 +20,13 @@ import (
 var confFile string
 var tx string
 var chain uint64
+var force bool
 
 func init() {
 	flag.StringVar(&confFile, "conf", "./config.json", "configuration file path")
 	flag.StringVar(&tx, "tx", "", "specify tx hash")
 	flag.Uint64Var(&chain, "chain", 0, "specify chain ID")
+	flag.BoolVar(&force, "force", false, "force transaction")
 
 	flag.Parse()
 }
@@ -84,6 +86,10 @@ func main() {
 	conf, err := config.LoadConfig(confFile)
 	if err != nil {
 		log.Fatalf("LoadConfig fail:%v", err)
+	}
+
+	if force {
+		conf.Force = true
 	}
 
 	// {

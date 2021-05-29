@@ -14,6 +14,7 @@ type Config struct {
 	EthConfig   EthConfig
 	HecoConfig  EthConfig
 	OKConfig    EthConfig
+	Force       bool
 }
 
 // MySQLConfig for mysql

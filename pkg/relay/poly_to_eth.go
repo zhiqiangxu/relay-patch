@@ -309,6 +309,8 @@ func (ctx *PolyToEth) makeTx(header *polytypes.Header, param *common2.ToMerkleVa
 	return txData
 }
 
+const hardCodedGasLimit uint64 = 500000
+
 func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	log.Infof("SendTx %s ToChainID %d", polyTxHash, ctx.ethConfig.SideChainId)
 
@@ -336,10 +338,16 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		From: ctx.account.Address, To: &contractaddr, Gas: 0, GasPrice: gasPrice,
 		Value: big.NewInt(0), Data: txData,
 	}
-	gasLimit, err := client.EstimateGas(timerCtx, callMsg)
-	if err != nil {
-		log.Errorf("client.EstimateGas failed:%v", err)
-		return
+
+	var gasLimit uint64
+	if ctx.conf.Force {
+		gasLimit = hardCodedGasLimit
+	} else {
+		gasLimit, err = client.EstimateGas(timerCtx, callMsg)
+		if err != nil {
+			log.Errorf("client.EstimateGas failed:%v", err)
+			return
+		}
 	}
 
 	tx := types.NewTransaction(nonce, contractaddr, big.NewInt(0), gasLimit, gasPrice, txData)
