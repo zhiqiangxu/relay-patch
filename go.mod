@@ -14,8 +14,11 @@ require (
 	github.com/polynetwork/poly-go-sdk v0.0.0-20210114120411-3dcba035134f
 	github.com/polynetwork/poly-io-test v0.0.0-20200819093740-8cf514b07750 // indirect
 	github.com/zhiqiangxu/util v0.0.0-20210114025214-5f087283a7a6
+	poly_bridge_sdk v0.0.0-00010101000000-000000000000
 )
 
 replace (
 	github.com/ethereum/go-ethereum => github.com/zhiqiangxu/go-ethereum v0.0.0-20210513053854-b16fac27e406
+
+	poly_bridge_sdk => github.com/blockchain-develop/poly_bridge_sdk v0.0.0-20210327080022-0e6eb4b31700
 )

@@ -282,7 +282,3 @@ func (chain *EthToPoly) isHeaderEpoch(hdr *polytypes.Header) (bool, []byte, erro
 	}
 	return true, publickeys, nil
 }
-
-func isPaid(param *common2.ToMerkleValue) bool {
-	return true
-}

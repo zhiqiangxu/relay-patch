@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"poly_bridge_sdk"
 	"strings"
 	"time"
 
@@ -38,6 +39,7 @@ type PolyToEth struct {
 	polyToEthCh chan string
 	doneCh      chan struct{}
 	polySdk     *sdk.PolySdk
+	bridgeSdk   *poly_bridge_sdk.BridgeFeeCheck
 	clients     []*ethclient.Client
 	ethConfig   *config.EthConfig
 	polyConfig  *config.PolyConfig
@@ -48,8 +50,8 @@ type PolyToEth struct {
 	idx         int
 }
 
-func NewPolyToEth(polyToEthCh chan string, polySdk *sdk.PolySdk, clients []*ethclient.Client, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config, account accounts.Account, keyStore *tools.EthKeyStore) *PolyToEth {
-	return &PolyToEth{polyToEthCh: polyToEthCh, doneCh: make(chan struct{}), polySdk: polySdk, clients: clients, ethConfig: ethConfig, polyConfig: polyConfig, conf: conf, account: account, keyStore: keyStore}
+func NewPolyToEth(polyToEthCh chan string, polySdk *sdk.PolySdk, bridgeSdk *poly_bridge_sdk.BridgeFeeCheck, clients []*ethclient.Client, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config, account accounts.Account, keyStore *tools.EthKeyStore) *PolyToEth {
+	return &PolyToEth{polyToEthCh: polyToEthCh, doneCh: make(chan struct{}), polySdk: polySdk, bridgeSdk: bridgeSdk, clients: clients, ethConfig: ethConfig, polyConfig: polyConfig, conf: conf, account: account, keyStore: keyStore}
 }
 
 func randIdx(size int) int {
@@ -182,13 +184,50 @@ func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 		return nil
 	}
 
-	if !isPaid(merkleValue) {
+	if !ctx.isPaid(merkleValue) {
 		log.Infof("%v skipped because not paid", polyEvt.TxHash)
 		return nil
 	}
 
 	return ctx.makeTx(hdr, merkleValue, hp, anchor, auditpath)
 
+}
+
+func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
+	if ctx.conf.EthConfig.SideChainId != ctx.ethConfig.SideChainId {
+		return true
+	}
+	if ctx.conf.Force {
+		return true
+	}
+
+	txHash := hex.EncodeToString(param.MakeTxParam.TxHash)
+	req := &poly_bridge_sdk.CheckFeeReq{Hash: txHash, ChainId: param.FromChainID}
+	for {
+		resp, err := ctx.bridgeSdk.CheckFee([]*poly_bridge_sdk.CheckFeeReq{req})
+		if err != nil {
+			log.Errorf("CheckFee failed:%v, TxHash:%s FromChainID:%d", err, txHash, param.FromChainID)
+			time.Sleep(time.Second)
+			continue
+		}
+		if len(resp) != 1 {
+			log.Errorf("CheckFee resp invalid, length %d, TxHash:%s FromChainID:%d", len(resp), txHash, param.FromChainID)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		switch resp[0].PayState {
+		case poly_bridge_sdk.STATE_HASPAY:
+			return true
+		case poly_bridge_sdk.STATE_NOTPAY:
+			return false
+		case poly_bridge_sdk.STATE_NOTCHECK:
+			log.Errorf("CheckFee STATE_NOTCHECK, TxHash:%s FromChainID:%d Poly Hash:%s, wait...", txHash, param.FromChainID, hex.EncodeToString(param.TxHash))
+			time.Sleep(time.Second)
+			continue
+		}
+
+	}
 }
 
 func (ctx *PolyToEth) findLatestPolyEpochHeight() uint32 {

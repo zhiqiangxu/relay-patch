@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"poly_bridge_sdk"
+
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/oklog/run"
 	sdk "github.com/polynetwork/poly-go-sdk"
@@ -68,11 +70,11 @@ func setUpEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	return workers
 }
 
-func setUpPolyToEth(clients []*ethclient.Client, ks *tools.EthKeyStore, polyToEthWorkCh chan string, polySdk *sdk.PolySdk, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config) []*relay.PolyToEth {
+func setUpPolyToEth(clients []*ethclient.Client, ks *tools.EthKeyStore, polyToEthWorkCh chan string, polySdk *sdk.PolySdk, bridgeSdk *poly_bridge_sdk.BridgeFeeCheck, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config) []*relay.PolyToEth {
 
 	var workers []*relay.PolyToEth
 	for _, account := range ks.GetAccounts() {
-		worker := relay.NewPolyToEth(polyToEthWorkCh, polySdk, clients, ethConfig, polyConfig, conf, account, ks)
+		worker := relay.NewPolyToEth(polyToEthWorkCh, polySdk, bridgeSdk, clients, ethConfig, polyConfig, conf, account, ks)
 		workers = append(workers, worker)
 	}
 
@@ -138,11 +140,13 @@ func main() {
 	ethToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.EthConfig.SideChainId], polySdk, signer, ethClients, &conf.EthConfig, conf)
 	okToPolyWorkers := setUpEthToPoly(ethToPolyChs[conf.OKConfig.SideChainId], polySdk, signer, okClients, &conf.OKConfig, conf)
 
-	polyToBscWorkers := setUpPolyToEth(bscClients, bscKS, polyToEthChs[conf.BSCConfig.SideChainId], polySdk, &conf.BSCConfig, &conf.PolyConfig, conf)
-	polyToHecoWorkers := setUpPolyToEth(hecoClients, hecoKS, polyToEthChs[conf.HecoConfig.SideChainId], polySdk, &conf.HecoConfig, &conf.PolyConfig, conf)
-	polyToCurveWorkers := setUpPolyToEth(curveClients, curveKS, polyToEthChs[conf.CurveConfig.SideChainId], polySdk, &conf.CurveConfig, &conf.PolyConfig, conf)
-	polyToEthWorkers := setUpPolyToEth(ethClients, ethKS, polyToEthChs[conf.EthConfig.SideChainId], polySdk, &conf.EthConfig, &conf.PolyConfig, conf)
-	polyToOKWorkers := setUpPolyToEth(okClients, okKS, polyToEthChs[conf.OKConfig.SideChainId], polySdk, &conf.OKConfig, &conf.PolyConfig, conf)
+	bridgeSdk := poly_bridge_sdk.NewBridgeFeeCheck(conf.BridgeConfig.RestURL, 5)
+
+	polyToBscWorkers := setUpPolyToEth(bscClients, bscKS, polyToEthChs[conf.BSCConfig.SideChainId], polySdk, bridgeSdk, &conf.BSCConfig, &conf.PolyConfig, conf)
+	polyToHecoWorkers := setUpPolyToEth(hecoClients, hecoKS, polyToEthChs[conf.HecoConfig.SideChainId], polySdk, bridgeSdk, &conf.HecoConfig, &conf.PolyConfig, conf)
+	polyToCurveWorkers := setUpPolyToEth(curveClients, curveKS, polyToEthChs[conf.CurveConfig.SideChainId], polySdk, bridgeSdk, &conf.CurveConfig, &conf.PolyConfig, conf)
+	polyToEthWorkers := setUpPolyToEth(ethClients, ethKS, polyToEthChs[conf.EthConfig.SideChainId], polySdk, bridgeSdk, &conf.EthConfig, &conf.PolyConfig, conf)
+	polyToOKWorkers := setUpPolyToEth(okClients, okKS, polyToEthChs[conf.OKConfig.SideChainId], polySdk, bridgeSdk, &conf.OKConfig, &conf.PolyConfig, conf)
 
 	if tx != "" {
 		txes := strings.Split(tx, ",")

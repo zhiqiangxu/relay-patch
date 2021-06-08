@@ -7,14 +7,20 @@ import (
 
 // Config ...
 type Config struct {
-	MySQLConfig MySQLConfig
-	PolyConfig  PolyConfig
-	CurveConfig EthConfig
-	BSCConfig   EthConfig
-	EthConfig   EthConfig
-	HecoConfig  EthConfig
-	OKConfig    EthConfig
-	Force       bool
+	MySQLConfig  MySQLConfig
+	PolyConfig   PolyConfig
+	CurveConfig  EthConfig
+	BSCConfig    EthConfig
+	EthConfig    EthConfig
+	HecoConfig   EthConfig
+	OKConfig     EthConfig
+	BridgeConfig BridgeConfig
+	Force        bool
+}
+
+// BridgeConfig ...
+type BridgeConfig struct {
+	RestURL [][]string
 }
 
 // MySQLConfig for mysql
