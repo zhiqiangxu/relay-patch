@@ -204,12 +204,14 @@ func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
 	txHash := hex.EncodeToString(param.MakeTxParam.TxHash)
 	req := &poly_bridge_sdk.CheckFeeReq{Hash: txHash, ChainId: param.FromChainID}
 	for {
+		start := time.Now()
 		resp, err := ctx.bridgeSdk.CheckFee([]*poly_bridge_sdk.CheckFeeReq{req})
 		if err != nil {
 			log.Errorf("CheckFee failed:%v, TxHash:%s FromChainID:%d", err, txHash, param.FromChainID)
 			time.Sleep(time.Second)
 			continue
 		}
+		log.Infof("CheckFee took %s", time.Now().Sub(start).String())
 		if len(resp) != 1 {
 			log.Errorf("CheckFee resp invalid, length %d, TxHash:%s FromChainID:%d", len(resp), txHash, param.FromChainID)
 			time.Sleep(time.Second)
