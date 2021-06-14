@@ -371,7 +371,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	var err error
 
 	gasPrice := ctx.conf.GasPrice
-	if gasPrice != nil {
+	if gasPrice == nil {
 		gasPrice, err = client.SuggestGasPrice(timerCtx)
 		if err != nil {
 			log.Fatalf("client.SuggestGasPrice failed:%v", err)
