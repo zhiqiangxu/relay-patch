@@ -368,11 +368,16 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	timerCtx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
-	gasPrice, err := client.SuggestGasPrice(timerCtx)
-	if err != nil {
-		log.Fatalf("client.SuggestGasPrice failed:%v", err)
+	var err error
+
+	gasPrice := ctx.conf.GasPrice
+	if gasPrice != nil {
+		gasPrice, err = client.SuggestGasPrice(timerCtx)
+		if err != nil {
+			log.Fatalf("client.SuggestGasPrice failed:%v", err)
+		}
+		gasPrice = big.NewInt(0).Quo(big.NewInt(0).Mul(gasPrice, big.NewInt(12)), big.NewInt(10))
 	}
-	gasPrice = big.NewInt(0).Quo(big.NewInt(0).Mul(gasPrice, big.NewInt(12)), big.NewInt(10))
 
 	contractaddr := common.HexToAddress(ctx.ethConfig.ECCMContractAddress)
 	callMsg := ethereum.CallMsg{

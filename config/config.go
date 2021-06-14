@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"io/ioutil"
+	"math/big"
 )
 
 // Config ...
@@ -15,6 +16,7 @@ type Config struct {
 	HecoConfig   EthConfig
 	OKConfig     EthConfig
 	BridgeConfig BridgeConfig
+	GasPrice     *big.Int
 	Force        bool
 }
 

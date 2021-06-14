@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"math/big"
 	"strings"
 	"time"
 
@@ -23,12 +24,14 @@ var confFile string
 var tx string
 var chain uint64
 var force bool
+var price string
 
 func init() {
 	flag.StringVar(&confFile, "conf", "./config.json", "configuration file path")
 	flag.StringVar(&tx, "tx", "", "specify tx hash")
 	flag.Uint64Var(&chain, "chain", 0, "specify chain ID")
 	flag.BoolVar(&force, "force", false, "force transaction")
+	flag.StringVar(&price, "price", "", "gas price")
 
 	flag.Parse()
 }
@@ -92,6 +95,14 @@ func main() {
 
 	if force {
 		conf.Force = true
+	}
+	if price != "" {
+		gasPrice := big.NewInt(0)
+		gasPrice, ok := gasPrice.SetString(price, 10)
+		if !ok {
+			log.Fatalf("invalid gas price:%v", price)
+		}
+		conf.GasPrice = gasPrice
 	}
 
 	// {
