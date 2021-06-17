@@ -194,7 +194,7 @@ func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 }
 
 func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
-	if ctx.conf.EthConfig.SideChainId != ctx.ethConfig.SideChainId {
+	if ctx.conf.EthConfig.SideChainId != ctx.ethConfig.SideChainId && ctx.conf.BSCConfig.SideChainId != ctx.ethConfig.SideChainId {
 		return true
 	}
 	if ctx.conf.Force {
