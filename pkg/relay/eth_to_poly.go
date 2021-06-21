@@ -148,7 +148,7 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 
 				proof, err := tools.GetProof(chain.ethConfig.RestURL[idx], chain.ethConfig.ECCDContractAddress, proofKey, heightHex)
 				if err != nil {
-					log.Fatalf("tools.GetProof failed:%v", err)
+					log.Fatalf("tools.GetProof failed:%v chainID:%d url:%s", err, chain.ethConfig.SideChainId, chain.ethConfig.RestURL[idx])
 				}
 
 				polyTxHash, err := chain.commitProof(uint32(height), proof, evt.Rawdata, txHash)
