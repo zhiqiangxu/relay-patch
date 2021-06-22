@@ -18,6 +18,7 @@ type Config struct {
 	BridgeConfig BridgeConfig
 	GasPrice     *big.Int
 	Force        bool
+	Print        bool
 }
 
 // BridgeConfig ...

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"os"
 	"poly_bridge_sdk"
 	"strings"
 	"time"
@@ -184,6 +185,10 @@ func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 		return nil
 	}
 
+	if ctx.conf.Print {
+		log.Infof("FromChainID:%d ToChainID:%d method:%s args:%s", merkleValue.FromChainID, merkleValue.MakeTxParam.ToChainID, merkleValue.MakeTxParam.Method, hex.EncodeToString(merkleValue.MakeTxParam.Args))
+		os.Exit(1)
+	}
 	if !ctx.isPaid(merkleValue) {
 		log.Infof("%v skipped because not paid", polyEvt.TxHash)
 		return nil

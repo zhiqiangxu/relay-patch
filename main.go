@@ -25,6 +25,7 @@ var tx string
 var chain uint64
 var force bool
 var price string
+var print bool
 
 func init() {
 	flag.StringVar(&confFile, "conf", "./config.json", "configuration file path")
@@ -32,6 +33,7 @@ func init() {
 	flag.Uint64Var(&chain, "chain", 0, "specify chain ID")
 	flag.BoolVar(&force, "force", false, "force transaction")
 	flag.StringVar(&price, "price", "", "gas price")
+	flag.BoolVar(&print, "print", false, "print merkle value")
 
 	flag.Parse()
 }
@@ -96,6 +98,10 @@ func main() {
 	if force {
 		conf.Force = true
 	}
+	if print {
+		conf.Print = true
+	}
+
 	if price != "" {
 		gasPrice := big.NewInt(0)
 		gasPrice, ok := gasPrice.SetString(price, 10)
