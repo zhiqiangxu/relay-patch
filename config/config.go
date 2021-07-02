@@ -8,17 +8,18 @@ import (
 
 // Config ...
 type Config struct {
-	MySQLConfig  MySQLConfig
-	PolyConfig   PolyConfig
-	CurveConfig  EthConfig
-	BSCConfig    EthConfig
-	EthConfig    EthConfig
-	HecoConfig   EthConfig
-	OKConfig     EthConfig
-	BridgeConfig BridgeConfig
-	GasPrice     *big.Int
-	Force        bool
-	Print        bool
+	MySQLConfig    MySQLConfig
+	PolyConfig     PolyConfig
+	CurveConfig    EthConfig
+	BSCConfig      EthConfig
+	EthConfig      EthConfig
+	HecoConfig     EthConfig
+	OKConfig       EthConfig
+	BridgeConfig   BridgeConfig
+	GasPrice       *big.Int
+	Force          bool
+	Print          bool
+	SkippedSenders []string
 }
 
 // BridgeConfig ...

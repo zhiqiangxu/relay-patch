@@ -33,14 +33,15 @@ import (
 
 // EthToPoly ...
 type EthToPoly struct {
-	ethToPolyCh chan string
-	doneCh      chan struct{}
-	polySdk     *sdk.PolySdk
-	signer      *sdk.Account
-	clients     []*ethclient.Client
-	ethConfig   *config.EthConfig
-	conf        *config.Config
-	idx         int
+	ethToPolyCh    chan string
+	doneCh         chan struct{}
+	polySdk        *sdk.PolySdk
+	signer         *sdk.Account
+	clients        []*ethclient.Client
+	ethConfig      *config.EthConfig
+	conf           *config.Config
+	idx            int
+	skippedSenders map[common.Address]bool
 }
 
 func NewEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
@@ -48,7 +49,12 @@ func NewEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	clients []*ethclient.Client,
 	ethConfig *config.EthConfig,
 	conf *config.Config) *EthToPoly {
-	return &EthToPoly{ethToPolyCh: ethToPolyCh, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, ethConfig: ethConfig, conf: conf}
+	skippedSenders := map[common.Address]bool{}
+	for _, s := range conf.SkippedSenders {
+		skippedSenders[common.HexToAddress(s)] = true
+	}
+
+	return &EthToPoly{ethToPolyCh: ethToPolyCh, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, ethConfig: ethConfig, conf: conf, skippedSenders: skippedSenders}
 }
 
 func (chain *EthToPoly) Start() {
