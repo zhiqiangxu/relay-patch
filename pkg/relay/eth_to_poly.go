@@ -125,9 +125,15 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 			}
 
 			param := &common2.MakeTxParam{}
+
 			err = param.Deserialization(common1.NewZeroCopySource([]byte(evt.Rawdata)))
 			if err != nil {
 				log.Fatalf("param.Deserialization failed:%v", err)
+			}
+
+			_, skipped := chain.skippedSenders[evt.Sender]
+			if skipped {
+				return param.ToChainID, ""
 			}
 
 			raw, _ := chain.polySdk.GetStorage(utils.CrossChainManagerContractAddress.ToHexString(),
