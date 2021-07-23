@@ -15,6 +15,7 @@ type Config struct {
 	EthConfig    EthConfig
 	HecoConfig   EthConfig
 	OKConfig     EthConfig
+	BorConfig    EthConfig
 	BridgeConfig BridgeConfig
 	GasPrice     *big.Int
 	Force        bool
