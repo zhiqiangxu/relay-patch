@@ -428,16 +428,17 @@ func (ctx *PolyToEth) sendTxAndReturnHash(timerCtx context.Context, signedtx *ty
 
 	conf := ctx.conf
 	switch ctx.ethConfig.SideChainId {
-	case conf.CurveConfig.SideChainId, conf.BSCConfig.SideChainId, conf.HecoConfig.SideChainId, conf.EthConfig.SideChainId:
+	case conf.OKConfig.SideChainId:
+		hash, err = ctx.clients[ctx.idx].SendOKTransaction(timerCtx, signedtx)
+	default:
 		err = ctx.clients[ctx.idx].SendTransaction(timerCtx, signedtx)
 		if err != nil {
 			log.Errorf("SendTransaction failed:%v, SideChainId:%d idx:%d", err, ctx.ethConfig.SideChainId, ctx.idx)
 			return
 		}
 		hash = signedtx.Hash()
-	case conf.OKConfig.SideChainId:
-		hash, err = ctx.clients[ctx.idx].SendOKTransaction(timerCtx, signedtx)
 	}
+
 	return
 }
 

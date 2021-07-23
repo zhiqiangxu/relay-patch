@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"math/big"
+	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Config ...
@@ -47,6 +50,7 @@ type PolyConfig struct {
 
 // EthConfig ...
 type EthConfig struct {
+	sync.Mutex
 	SideChainId         uint64
 	RestURL             []string
 	ECCMContractAddress string
@@ -54,6 +58,30 @@ type EthConfig struct {
 	KeyStorePath        string
 	KeyStorePwdSet      map[string]string
 	BlockConfig         uint64
+	SkippedSenders      []string
+	skipped             map[common.Address]bool
+}
+
+func (c *EthConfig) ShouldSkip(addr common.Address) bool {
+	if c.skipped != nil {
+		return c.skipped[addr]
+	}
+
+	c.Lock()
+	defer c.Unlock()
+
+	if c.skipped != nil {
+		return c.skipped[addr]
+	}
+
+	skipped := make(map[common.Address]bool)
+	for _, sender := range c.SkippedSenders {
+		skipped[common.HexToAddress(sender)] = true
+	}
+
+	c.skipped = skipped
+
+	return c.skipped[addr]
 }
 
 // LoadConfig ...

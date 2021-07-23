@@ -124,6 +124,10 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 				log.Fatalf("param.Deserialization failed:%v", err)
 			}
 
+			if chain.ethConfig.ShouldSkip(evt.Sender) {
+				return param.ToChainID, ""
+			}
+
 			raw, _ := chain.polySdk.GetStorage(utils.CrossChainManagerContractAddress.ToHexString(),
 				append(append([]byte(cross_chain_manager.DONE_TX), utils.GetUint64Bytes(chain.ethConfig.SideChainId)...), param.CrossChainID...))
 
@@ -168,8 +172,6 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 func (chain *EthToPoly) decideProofHeight() int64 {
 	conf := chain.conf
 	switch chain.ethConfig.SideChainId {
-	case conf.CurveConfig.SideChainId, conf.BSCConfig.SideChainId, conf.HecoConfig.SideChainId, conf.EthConfig.SideChainId:
-		return int64(chain.findLastestSideChainHeight() - chain.ethConfig.BlockConfig)
 	case conf.OKConfig.SideChainId:
 		for {
 			height, err := chain.clients[chain.idx].BlockNumber(context.Background())
@@ -181,9 +183,7 @@ func (chain *EthToPoly) decideProofHeight() int64 {
 			return int64(height - 3)
 		}
 	default:
-		log.Fatalf("unhandled chain in decideProofHeight:%d", chain.ethConfig.SideChainId)
-		// to quiet ide
-		return 0
+		return int64(chain.findLastestSideChainHeight() - chain.ethConfig.BlockConfig)
 	}
 
 }

@@ -88,6 +88,9 @@ func setUpPolyToEth(clients []*ethclient.Client, ks *tools.EthKeyStore, polyToEt
 }
 
 func idToEthConf(id uint64, conf *config.Config) *config.EthConfig {
+	if id == 0 {
+		return nil
+	}
 	switch id {
 	case conf.BSCConfig.SideChainId:
 		return &conf.BSCConfig
@@ -157,7 +160,7 @@ func main() {
 		conf.CurveConfig.SideChainId,
 		conf.EthConfig.SideChainId,
 		conf.OKConfig.SideChainId,
-		// conf.BorConfig.SideChainId,
+		conf.BorConfig.SideChainId,
 	}
 
 	ethToPolyChs := make(map[uint64]chan string)
@@ -168,9 +171,13 @@ func main() {
 	for _, chainID := range chainIDs {
 		ethToPolyChs[chainID] = make(chan string)
 		polyToEthChs[chainID] = make(chan string)
-		clients, ks := setUpEthClientAndKeyStore(idToEthConf(chainID, conf))
-		eth2PolyWorkers[chainID] = setUpEthToPoly(ethToPolyChs[chainID], polySdk, signer, clients, idToEthConf(chainID, conf), conf)
-		polyToEthWorkers[chainID] = setUpPolyToEth(clients, ks, polyToEthChs[chainID], polySdk, bridgeSdk, idToEthConf(chainID, conf), &conf.PolyConfig, conf)
+		ethConf := idToEthConf(chainID, conf)
+		if ethConf == nil {
+			continue
+		}
+		clients, ks := setUpEthClientAndKeyStore(ethConf)
+		eth2PolyWorkers[chainID] = setUpEthToPoly(ethToPolyChs[chainID], polySdk, signer, clients, ethConf, conf)
+		polyToEthWorkers[chainID] = setUpPolyToEth(clients, ks, polyToEthChs[chainID], polySdk, bridgeSdk, ethConf, &conf.PolyConfig, conf)
 	}
 
 	if tx != "" {
