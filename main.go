@@ -202,7 +202,7 @@ func main() {
 			default:
 				targetWorkersForEthToPoly = eth2PolyWorkers[chain]
 				if len(targetWorkersForEthToPoly) == 0 {
-					log.Fatalf("unsupported chainID:%d", chain)
+					log.Fatalf("eth2poly unsupported chainID:%d", chain)
 				}
 
 			}
@@ -226,7 +226,7 @@ func main() {
 
 			targetWorkersForPolyToEth = polyToEthWorkers[toChainID]
 			if len(targetWorkersForPolyToEth) == 0 {
-				log.Fatalf("unsupported chainID:%d", chain)
+				log.Fatalf("poly2eth unsupported chainID:%d", toChainID)
 			}
 
 			targetWorkersForPolyToEth[0].SendTx(polyTxHash)

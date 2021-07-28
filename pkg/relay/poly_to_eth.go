@@ -229,7 +229,7 @@ func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
 		case poly_bridge_sdk.STATE_NOTPAY:
 			return false
 		case poly_bridge_sdk.STATE_NOTCHECK:
-			log.Errorf("CheckFee STATE_NOTCHECK, TxHash:%s FromChainID:%d Poly Hash:%s, wait...", txHash, param.FromChainID, hex.EncodeToString(param.TxHash))
+			log.Errorf("CheckFee STATE_NOTCHECK, TxHash:%s FromChainID:%d Poly Hash:%s, wait...", txHash, param.FromChainID, hex.EncodeToString(common1.ToArrayReverse(param.TxHash)))
 			time.Sleep(time.Second)
 			continue
 		}
@@ -396,7 +396,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	} else {
 		gasLimit, err = client.EstimateGas(timerCtx, callMsg)
 		if err != nil {
-			log.Errorf("client.EstimateGas failed:%v", err)
+			log.Errorf("client.EstimateGas failed:%v polyTxHash:%s", err, polyTxHash)
 			return
 		}
 	}
