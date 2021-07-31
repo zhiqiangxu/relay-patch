@@ -236,6 +236,12 @@ func main() {
 
 	}
 
+	go func() {
+		timer := time.NewTimer(time.Minute * 5)
+		<-timer.C
+		log.Fatal("max time exceeded, auto restart")
+	}()
+
 	mysql, err := storage.NewMySQL(conf.MySQLConfig)
 	if err != nil {
 		log.Fatalf("storage.NewMySQL failed:%v", err)
