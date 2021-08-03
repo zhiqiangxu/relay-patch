@@ -199,6 +199,9 @@ func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 }
 
 func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
+	if ctx.conf.CheckMerkleRoot {
+		return true
+	}
 	if ctx.conf.EthConfig.SideChainId != ctx.ethConfig.SideChainId && ctx.conf.BSCConfig.SideChainId != ctx.ethConfig.SideChainId {
 		return true
 	}
@@ -294,11 +297,27 @@ func (ctx *PolyToEth) isHeaderEpoch(hdr *polytypes.Header) (bool, []byte, error)
 	return true, publickeys, nil
 }
 
+func (ctx *PolyToEth) checkMerkleRoot(rawAuditPath []byte, header *polytypes.Header) {
+	root, err := tools.MerkleRoot(rawAuditPath, header.CrossStateRoot.ToArray())
+	if err != nil {
+		log.Warn("wrong root", err)
+	}
+
+	log.Info("expect root:", hex.EncodeToString(common1.ToArrayReverse(root)))
+	log.Info("actual root:", header.CrossStateRoot.ToHexString())
+	return
+}
+
 func (ctx *PolyToEth) makeTx(header *polytypes.Header, param *common2.ToMerkleValue, headerProof string, anchorHeader *polytypes.Header, rawAuditPath []byte) []byte {
 	var (
 		sigs       []byte
 		headerData []byte
 	)
+	if ctx.conf.CheckMerkleRoot {
+		ctx.checkMerkleRoot(rawAuditPath, header)
+		return nil
+	}
+
 	if anchorHeader != nil && headerProof != "" {
 		for _, sig := range anchorHeader.SigData {
 			temp := make([]byte, len(sig))
@@ -381,7 +400,9 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		if err != nil {
 			log.Fatalf("client.SuggestGasPrice failed:%v", err)
 		}
-		gasPrice = big.NewInt(0).Quo(big.NewInt(0).Mul(gasPrice, big.NewInt(12)), big.NewInt(10))
+		if !ctx.conf.IsEth(ctx.ethConfig.SideChainId) {
+			gasPrice = big.NewInt(0).Quo(big.NewInt(0).Mul(gasPrice, big.NewInt(12)), big.NewInt(10))
+		}
 	}
 
 	contractaddr := common.HexToAddress(ctx.ethConfig.ECCMContractAddress)

@@ -27,6 +27,7 @@ var chain uint64
 var force bool
 var price string
 var print bool
+var mr bool
 
 func init() {
 	flag.StringVar(&confFile, "conf", "./config.json", "configuration file path")
@@ -35,6 +36,7 @@ func init() {
 	flag.BoolVar(&force, "force", false, "force transaction")
 	flag.StringVar(&price, "price", "", "gas price")
 	flag.BoolVar(&print, "print", false, "print merkle value")
+	flag.BoolVar(&mr, "mr", false, "check merkle root")
 
 	flag.Parse()
 }
@@ -123,6 +125,9 @@ func main() {
 	}
 	if print {
 		conf.Print = true
+	}
+	if mr {
+		conf.CheckMerkleRoot = true
 	}
 
 	if price != "" {
@@ -237,7 +242,7 @@ func main() {
 	}
 
 	go func() {
-		timer := time.NewTimer(time.Minute * 5)
+		timer := time.NewTimer(time.Minute * 15)
 		<-timer.C
 		log.Fatal("max time exceeded, auto restart")
 	}()

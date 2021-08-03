@@ -11,18 +11,23 @@ import (
 
 // Config ...
 type Config struct {
-	MySQLConfig  MySQLConfig
-	PolyConfig   PolyConfig
-	CurveConfig  EthConfig
-	BSCConfig    EthConfig
-	EthConfig    EthConfig
-	HecoConfig   EthConfig
-	OKConfig     EthConfig
-	BorConfig    EthConfig
-	BridgeConfig BridgeConfig
-	GasPrice     *big.Int
-	Force        bool
-	Print        bool
+	MySQLConfig     MySQLConfig
+	PolyConfig      PolyConfig
+	CurveConfig     EthConfig
+	BSCConfig       EthConfig
+	EthConfig       EthConfig
+	HecoConfig      EthConfig
+	OKConfig        EthConfig
+	BorConfig       EthConfig
+	BridgeConfig    BridgeConfig
+	GasPrice        *big.Int
+	Force           bool
+	CheckMerkleRoot bool
+	Print           bool
+}
+
+func (c *Config) IsEth(chainID uint64) bool {
+	return c.EthConfig.SideChainId == chainID
 }
 
 // BridgeConfig ...

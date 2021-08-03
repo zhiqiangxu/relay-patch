@@ -125,6 +125,7 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 			}
 
 			if chain.ethConfig.ShouldSkip(evt.Sender) {
+				log.Infof("sender %s is skipped", evt.Sender.Hex())
 				return param.ToChainID, ""
 			}
 
@@ -166,6 +167,7 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 		}
 	}
 
+	log.Warnf("eccm event not found for tx %s", ethTxHash)
 	return 0, ""
 }
 
