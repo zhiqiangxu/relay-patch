@@ -124,6 +124,10 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 				log.Fatalf("param.Deserialization failed:%v", err)
 			}
 
+			if !chain.conf.IsWhitelistMethod(param.Method) && !chain.conf.Force {
+				log.Errorf("method %s is forbiden", param.Method)
+				return param.ToChainID, ""
+			}
 			if chain.ethConfig.ShouldSkip(evt.Sender) {
 				log.Infof("sender %s is skipped", evt.Sender.Hex())
 				return param.ToChainID, ""

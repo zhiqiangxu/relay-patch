@@ -180,6 +180,10 @@ func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 		return nil
 	}
 
+	if !ctx.conf.IsWhitelistMethod(merkleValue.MakeTxParam.Method) && !ctx.conf.Force {
+		log.Errorf("method %s forbiden for poly_hash %s", merkleValue.MakeTxParam.Method, polyTxHash)
+		return nil
+	}
 	if merkleValue.MakeTxParam.ToChainID != ctx.ethConfig.SideChainId {
 		log.Errorf("ignored because ToChainID not match for poly_hash %s, got %d expect %d", polyTxHash, merkleValue.MakeTxParam.ToChainID, ctx.ethConfig.SideChainId)
 		return nil

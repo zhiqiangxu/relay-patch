@@ -11,23 +11,37 @@ import (
 
 // Config ...
 type Config struct {
-	MySQLConfig     MySQLConfig
-	PolyConfig      PolyConfig
-	CurveConfig     EthConfig
-	BSCConfig       EthConfig
-	EthConfig       EthConfig
-	HecoConfig      EthConfig
-	OKConfig        EthConfig
-	BorConfig       EthConfig
-	BridgeConfig    BridgeConfig
-	GasPrice        *big.Int
-	Force           bool
-	CheckMerkleRoot bool
-	Print           bool
+	sync.Once
+	MySQLConfig      MySQLConfig
+	PolyConfig       PolyConfig
+	CurveConfig      EthConfig
+	BSCConfig        EthConfig
+	EthConfig        EthConfig
+	HecoConfig       EthConfig
+	OKConfig         EthConfig
+	BorConfig        EthConfig
+	BridgeConfig     BridgeConfig
+	GasPrice         *big.Int
+	WhitelistMethods []string
+	Force            bool
+	CheckMerkleRoot  bool
+	Print            bool
+	whitelistMethods map[string]bool
 }
 
 func (c *Config) IsEth(chainID uint64) bool {
 	return c.EthConfig.SideChainId == chainID
+}
+
+func (c *Config) IsWhitelistMethod(method string) bool {
+	c.Do(func() {
+		c.whitelistMethods = map[string]bool{}
+		for _, m := range c.WhitelistMethods {
+			c.whitelistMethods[m] = true
+		}
+	})
+
+	return c.whitelistMethods[method]
 }
 
 // BridgeConfig ...
@@ -55,7 +69,7 @@ type PolyConfig struct {
 
 // EthConfig ...
 type EthConfig struct {
-	sync.Mutex
+	sync.Once
 	SideChainId         uint64
 	RestURL             []string
 	ECCMContractAddress string
@@ -68,23 +82,14 @@ type EthConfig struct {
 }
 
 func (c *EthConfig) ShouldSkip(addr common.Address) bool {
-	if c.skipped != nil {
-		return c.skipped[addr]
-	}
+	c.Do(func() {
+		skipped := make(map[common.Address]bool)
+		for _, sender := range c.SkippedSenders {
+			skipped[common.HexToAddress(sender)] = true
+		}
 
-	c.Lock()
-	defer c.Unlock()
-
-	if c.skipped != nil {
-		return c.skipped[addr]
-	}
-
-	skipped := make(map[common.Address]bool)
-	for _, sender := range c.SkippedSenders {
-		skipped[common.HexToAddress(sender)] = true
-	}
-
-	c.skipped = skipped
+		c.skipped = skipped
+	})
 
 	return c.skipped[addr]
 }
