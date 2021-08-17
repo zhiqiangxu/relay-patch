@@ -224,7 +224,11 @@ func main() {
 
 			polyTxHeight, err := polySdk.GetBlockHeightByTxHash(polyTxHash)
 			if err != nil {
-				log.Fatalf("polySdk.GetBlockHeightByTxHash failed:%v", err)
+				log.Warnf("polySdk.GetBlockHeightByTxHash failed:%v", err)
+				polyTxHeight, err = polySdk.GetCurrentBlockHeight()
+				if err != nil {
+					log.Fatalf("poly2eth calc polyTxHeight by GetCurrentBlockHeight failed:%v", err)
+				}
 			}
 
 			waitPolyHeight(polySdk, polyTxHeight+1)
