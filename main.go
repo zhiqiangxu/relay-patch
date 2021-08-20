@@ -11,6 +11,7 @@ import (
 	"poly_bridge_sdk"
 
 	"github.com/ethereum/go-ethereum/ethclient"
+	oksdk "github.com/okex/exchain-go-sdk"
 	"github.com/oklog/run"
 	sdk "github.com/polynetwork/poly-go-sdk"
 	"github.com/zhiqiangxu/relay-patch/config"
@@ -41,8 +42,8 @@ func init() {
 	flag.Parse()
 }
 
-func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) ([]*ethclient.Client, *tools.EthKeyStore) {
-	var clients []*ethclient.Client
+func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) (clients []*ethclient.Client, tmClients []*oksdk.Client, ks *tools.EthKeyStore) {
+
 	for _, node := range ethConfig.RestURL {
 		client, err := ethclient.Dial(node)
 		if err != nil {
@@ -50,6 +51,12 @@ func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) ([]*ethclient.Client
 		}
 
 		clients = append(clients, client)
+	}
+	for _, tmNode := range ethConfig.TMRestURL {
+		config, _ := oksdk.NewClientConfig(tmNode, "okexchain-65", oksdk.BroadcastBlock, "0.01okt", 200000, 0, "")
+		client := oksdk.NewClient(config)
+
+		tmClients = append(tmClients, &client)
 	}
 
 	start := time.Now()
@@ -59,20 +66,21 @@ func setUpEthClientAndKeyStore(ethConfig *config.EthConfig) ([]*ethclient.Client
 	}
 	log.Infof("SideChain %d ChainID() took %v", ethConfig.SideChainId, time.Now().Sub(start).String())
 
-	ks := tools.NewEthKeyStore(ethConfig.KeyStorePath, ethConfig.KeyStorePwdSet, chainID)
+	ks = tools.NewEthKeyStore(ethConfig.KeyStorePath, ethConfig.KeyStorePwdSet, chainID)
 
-	return clients, ks
+	return
 }
 
 func setUpEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	signer *sdk.Account,
 	clients []*ethclient.Client,
+	tmClients []*oksdk.Client,
 	ethConfig *config.EthConfig,
 	conf *config.Config) []*relay.EthToPoly {
 
 	var workers []*relay.EthToPoly
 	for i := 0; i < 5; i++ {
-		workers = append(workers, relay.NewEthToPoly(ethToPolyCh, polySdk, signer, clients, ethConfig, conf))
+		workers = append(workers, relay.NewEthToPoly(ethToPolyCh, polySdk, signer, clients, tmClients, ethConfig, conf))
 	}
 
 	return workers
@@ -180,8 +188,8 @@ func main() {
 		if ethConf == nil {
 			continue
 		}
-		clients, ks := setUpEthClientAndKeyStore(ethConf)
-		eth2PolyWorkers[chainID] = setUpEthToPoly(ethToPolyChs[chainID], polySdk, signer, clients, ethConf, conf)
+		clients, tmClients, ks := setUpEthClientAndKeyStore(ethConf)
+		eth2PolyWorkers[chainID] = setUpEthToPoly(ethToPolyChs[chainID], polySdk, signer, clients, tmClients, ethConf, conf)
 		polyToEthWorkers[chainID] = setUpPolyToEth(clients, ks, polyToEthChs[chainID], polySdk, bridgeSdk, ethConf, &conf.PolyConfig, conf)
 	}
 

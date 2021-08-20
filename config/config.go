@@ -33,6 +33,10 @@ func (c *Config) IsEth(chainID uint64) bool {
 	return c.EthConfig.SideChainId == chainID
 }
 
+func (c *Config) IsOK(chainID uint64) bool {
+	return c.OKConfig.SideChainId == chainID
+}
+
 func (c *Config) IsWhitelistMethod(method string) bool {
 	c.Do(func() {
 		c.whitelistMethods = map[string]bool{}
@@ -72,6 +76,7 @@ type EthConfig struct {
 	sync.Once
 	SideChainId         uint64
 	RestURL             []string
+	TMRestURL           []string
 	ECCMContractAddress string
 	ECCDContractAddress string
 	KeyStorePath        string
