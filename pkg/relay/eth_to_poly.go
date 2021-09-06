@@ -10,10 +10,14 @@ import (
 	"math/big"
 	"time"
 
+	cmcodec "github.com/cosmos/cosmos-sdk/codec"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	oksdk "github.com/okex/exchain-go-sdk"
+	"github.com/okex/exchain/app"
+	"github.com/okex/exchain/app/codec"
 	"github.com/ontio/ontology-crypto/keypair"
 	vconfig "github.com/ontio/ontology/consensus/vbft/config"
 	"github.com/ontio/ontology/smartcontract/service/native/cross_chain/cross_chain_manager"
@@ -42,11 +46,14 @@ type EthToPoly struct {
 	conf           *config.Config
 	idx            int
 	skippedSenders map[common.Address]bool
+	tmClients      []*oksdk.Client
+	cdc            *cmcodec.Codec
 }
 
 func NewEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	signer *sdk.Account,
 	clients []*ethclient.Client,
+	tmClients []*oksdk.Client,
 	ethConfig *config.EthConfig,
 	conf *config.Config) *EthToPoly {
 	skippedSenders := map[common.Address]bool{}
@@ -54,7 +61,11 @@ func NewEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 		skippedSenders[common.HexToAddress(s)] = true
 	}
 
-	return &EthToPoly{ethToPolyCh: ethToPolyCh, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, ethConfig: ethConfig, conf: conf, skippedSenders: skippedSenders}
+	var cdc *cmcodec.Codec
+	if conf.IsOK(ethConfig.SideChainId) {
+		cdc = codec.MakeCodec(app.ModuleBasics)
+	}
+	return &EthToPoly{ethToPolyCh: ethToPolyCh, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, tmClients: tmClients, ethConfig: ethConfig, conf: conf, cdc: cdc, skippedSenders: skippedSenders}
 }
 
 func (chain *EthToPoly) Start() {
@@ -130,6 +141,15 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 				log.Fatalf("param.Deserialization failed:%v", err)
 			}
 
+			if !chain.conf.IsWhitelistMethod(param.Method) && !chain.conf.Force {
+				log.Errorf("method %s is forbiden", param.Method)
+				return param.ToChainID, ""
+			}
+			if chain.ethConfig.ShouldSkip(evt.Sender) {
+				log.Infof("sender %s is skipped", evt.Sender.Hex())
+				return param.ToChainID, ""
+			}
+
 			raw, _ := chain.polySdk.GetStorage(utils.CrossChainManagerContractAddress.ToHexString(),
 				append(append([]byte(cross_chain_manager.DONE_TX), utils.GetUint64Bytes(chain.ethConfig.SideChainId)...), param.CrossChainID...))
 
@@ -157,7 +177,13 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 					log.Fatalf("tools.GetProof failed:%v proofHeight:%d chainID:%d url:%s", err, height, chain.ethConfig.SideChainId, chain.ethConfig.RestURL[idx])
 				}
 
-				polyTxHash, err := chain.commitProof(uint32(height), proof, evt.Rawdata, txHash)
+				var polyTxHash string
+				if chain.conf.IsOK(chain.ethConfig.SideChainId) {
+					polyTxHash, err = chain.commitOKProof(uint32(height), proof, evt.Rawdata, txHash)
+				} else {
+					polyTxHash, err = chain.commitProof(uint32(height), proof, evt.Rawdata, []byte{}, txHash)
+				}
+
 				if err != nil {
 					log.Fatalf("commitProof failed:%v", err)
 				}
@@ -168,14 +194,13 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 		}
 	}
 
+	log.Warnf("eccm event not found for tx %s", ethTxHash)
 	return 0, ""
 }
 
 func (chain *EthToPoly) decideProofHeight() int64 {
 	conf := chain.conf
 	switch chain.ethConfig.SideChainId {
-	case conf.CurveConfig.SideChainId, conf.BSCConfig.SideChainId, conf.HecoConfig.SideChainId, conf.EthConfig.SideChainId:
-		return int64(chain.findLastestSideChainHeight() - chain.ethConfig.BlockConfig)
 	case conf.OKConfig.SideChainId:
 		for {
 			height, err := chain.clients[chain.idx].BlockNumber(context.Background())
@@ -184,12 +209,10 @@ func (chain *EthToPoly) decideProofHeight() int64 {
 				time.Sleep(time.Second)
 				continue
 			}
-			return int64(height - 3)
+			return int64(height - 10)
 		}
 	default:
-		log.Fatalf("unhandled chain in decideProofHeight:%d", chain.ethConfig.SideChainId)
-		// to quiet ide
-		return 0
+		return int64(chain.findLastestSideChainHeight() - chain.ethConfig.BlockConfig)
 	}
 
 }
@@ -212,7 +235,7 @@ func (chain *EthToPoly) findLastestSideChainHeight() uint64 {
 	}
 }
 
-func (chain *EthToPoly) commitProof(height uint32, proof []byte, value []byte, txhash []byte) (string, error) {
+func (chain *EthToPoly) commitProof(height uint32, proof []byte, value []byte, headerOrCrossChainMsg []byte, txhash []byte) (string, error) {
 	// log.Infof("commit proof, height: %d, proof: %s, value: %s, txhash: %s", height, string(proof), hex.EncodeToString(value), hex.EncodeToString(txhash))
 	tx, err := chain.polySdk.Native.Ccm.ImportOuterTransfer(
 		chain.ethConfig.SideChainId,
@@ -220,7 +243,7 @@ func (chain *EthToPoly) commitProof(height uint32, proof []byte, value []byte, t
 		height,
 		proof,
 		common.Hex2Bytes(chain.signer.Address.ToHexString()),
-		[]byte{},
+		headerOrCrossChainMsg,
 		chain.signer)
 	if err != nil {
 		log.Fatalf("ImportOuterTransfer failed:%v", err)
