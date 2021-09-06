@@ -136,6 +136,7 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 			}
 
 			param := &common2.MakeTxParam{}
+
 			err = param.Deserialization(common1.NewZeroCopySource([]byte(evt.Rawdata)))
 			if err != nil {
 				log.Fatalf("param.Deserialization failed:%v", err)
@@ -147,6 +148,11 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 			}
 			if chain.ethConfig.ShouldSkip(evt.Sender) {
 				log.Infof("sender %s is skipped", evt.Sender.Hex())
+				return param.ToChainID, ""
+			}
+
+			_, skipped := chain.skippedSenders[evt.Sender]
+			if skipped {
 				return param.ToChainID, ""
 			}
 
