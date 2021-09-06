@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-xorm/xorm"
+	"github.com/zhiqiangxu/relay-patch/config"
 	"github.com/zhiqiangxu/relay-patch/pkg/log"
 	"github.com/zhiqiangxu/util"
 )
@@ -94,12 +95,62 @@ func (f *Filter) Stop() {
 	close(f.doneCh)
 }
 
-func (f *Filter) queryCrossTxInfo() (list []*CrossTxInfo, err error) {
+const TX_QUERY = `
+SELECT a.chain_id src_chain_id,
+       a.dst_chain_id,
+       a.hash src_hash,
+       c.hash poly_hash,
+       a.time
+FROM src_transactions a
+JOIN wrapper_transactions b ON a.hash=b.hash
+LEFT JOIN poly_transactions c ON a.hash=c.src_hash
+JOIN wrapper_transactions d ON a.hash=d.hash
+WHERE b.status!=0 AND (UNIX_TIMESTAMP() < a.time + ?)
+  AND if((a.chain_id in (6, 7, 10, 12)
+          AND c.hash IS NULL
+          AND UNIX_TIMESTAMP()>a.time+180)
+         OR (a.dst_chain_id in (6, 7, 10, 12, 17)
+             AND c.hash IS NOT NULL
+             AND UNIX_TIMESTAMP()>c.time+180)
+         OR (a.chain_id in (2, 17)
+             AND c.hash IS NULL
+             AND UNIX_TIMESTAMP()>a.time+600)
+         OR (a.dst_chain_id=2
+             AND c.hash IS NOT NULL
+             AND UNIX_TIMESTAMP()>c.time+600),TRUE, FALSE)
+UNION ALL
+SELECT a.chain_id AS src_chain_id,
+       a.dst_chain_id AS dst_chain_id,
+       a.hash AS src_hash,
+       b.hash AS poly_hash,
+       a.time AS TIME
+FROM src_transactions a
+LEFT JOIN poly_transactions b ON a.hash = b.src_hash
+LEFT JOIN dst_transactions c ON b.hash = c.poly_hash
+WHERE a.chain_id = 10 AND (UNIX_TIMESTAMP() < a.time + ?)
+  AND IF((b.hash IS NULL
+          AND UNIX_TIMESTAMP()>a.time+180)
+         OR (b.hash IS NOT NULL
+             AND c.hash IS NULL
+             AND ((a.dst_chain_id in (6, 7, 10, 12, 17)
+                   AND UNIX_TIMESTAMP()>b.time+180)
+                  OR (a.dst_chain_id=2
+                      AND UNIX_TIMESTAMP()>b.time+600))),TRUE, FALSE)
+  AND UNIX_TIMESTAMP()<a.time+86400`
 
-	results, err := f.mysql.QueryString(
-		`select a.chain_id src_chain_id,a.dst_chain_id,a.hash src_hash,c.hash poly_hash,a.time from src_transactions a join wrapper_transactions b on a.hash=b.hash left join poly_transactions c on a.hash=c.src_hash join wrapper_transactions d on a.hash=d.hash where b.status!=0 and if((a.chain_id in (6,7,10,12) and c.hash is null and UNIX_TIMESTAMP()>a.time+180) or (a.dst_chain_id in (6,7,10,12,17) and c.hash is not null and UNIX_TIMESTAMP()>c.time+180) or (a.chain_id in (2,17) and c.hash is null and UNIX_TIMESTAMP()>a.time+600) or (a.dst_chain_id=2 and c.hash is not null and UNIX_TIMESTAMP()>c.time+600),true,false)
-	union all 
-		select a.chain_id as src_chain_id, a.dst_chain_id as dst_chain_id, a.hash as src_hash, b.hash as poly_hash, a.time as time from src_transactions a left join poly_transactions b on a.hash = b.src_hash left join dst_transactions c on b.hash = c.poly_hash where a.chain_id = 10 and IF((b.hash is null and UNIX_TIMESTAMP()>a.time+180) or (b.hash is not null and c.hash is null and ((a.dst_chain_id in (6,7,10,12,17) and UNIX_TIMESTAMP()>b.time+180) or (a.dst_chain_id=2 and UNIX_TIMESTAMP()>b.time+600) ) ),true,false) and UNIX_TIMESTAMP()<a.time+86400`)
+func (f *Filter) queryCrossTxInfo() (list []*CrossTxInfo, err error) {
+	days := config.CONFIG.FilterDays
+	if days == 0 {
+		days = 3
+	}
+
+	/*
+		results, err := f.mysql.QueryString(
+			`select a.chain_id src_chain_id,a.dst_chain_id,a.hash src_hash,c.hash poly_hash,a.time from src_transactions a join wrapper_transactions b on a.hash=b.hash left join poly_transactions c on a.hash=c.src_hash join wrapper_transactions d on a.hash=d.hash where b.status!=0 and if((a.chain_id in (6,7,10,12) and c.hash is null and UNIX_TIMESTAMP()>a.time+180) or (a.dst_chain_id in (6,7,10,12,17) and c.hash is not null and UNIX_TIMESTAMP()>c.time+180) or (a.chain_id in (2,17) and c.hash is null and UNIX_TIMESTAMP()>a.time+600) or (a.dst_chain_id=2 and c.hash is not null and UNIX_TIMESTAMP()>c.time+600),true,false)
+		union all
+			select a.chain_id as src_chain_id, a.dst_chain_id as dst_chain_id, a.hash as src_hash, b.hash as poly_hash, a.time as time from src_transactions a left join poly_transactions b on a.hash = b.src_hash left join dst_transactions c on b.hash = c.poly_hash where a.chain_id = 10 and IF((b.hash is null and UNIX_TIMESTAMP()>a.time+180) or (b.hash is not null and c.hash is null and ((a.dst_chain_id in (6,7,10,12,17) and UNIX_TIMESTAMP()>b.time+180) or (a.dst_chain_id=2 and UNIX_TIMESTAMP()>b.time+600) ) ),true,false) and UNIX_TIMESTAMP()<a.time+86400`)
+	*/
+	results, err := f.mysql.QueryString(TX_QUERY, days*24*3600)
 	if err != nil {
 		return
 	}

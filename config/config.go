@@ -9,25 +9,28 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+var CONFIG *Config
+
 // Config ...
 type Config struct {
-	MySQLConfig    MySQLConfig
-	PolyConfig     PolyConfig
-	CurveConfig    EthConfig
-	BSCConfig      EthConfig
-	EthConfig      EthConfig
-	HecoConfig     EthConfig
-	OKConfig       EthConfig
-	BridgeConfig   BridgeConfig
-	GasPrice       *big.Int
-	Print          bool
-	SkippedSenders []string
 	sync.Once
+	MySQLConfig      MySQLConfig
+	PolyConfig       PolyConfig
+	CurveConfig      EthConfig
+	BSCConfig        EthConfig
+	EthConfig        EthConfig
+	HecoConfig       EthConfig
+	OKConfig         EthConfig
+	BridgeConfig     BridgeConfig
+	GasPrice         *big.Int
+	Print            bool
+	SkippedSenders   []string
 	BorConfig        EthConfig
 	WhitelistMethods []string
 	Force            bool
 	CheckMerkleRoot  bool
 	whitelistMethods map[string]bool
+	FilterDays       int
 }
 
 func (c *Config) IsEth(chainID uint64) bool {
@@ -109,5 +112,6 @@ func LoadConfig(confFile string) (config *Config, err error) {
 
 	config = &Config{}
 	err = json.Unmarshal(jsonBytes, config)
+	CONFIG = config
 	return
 }
