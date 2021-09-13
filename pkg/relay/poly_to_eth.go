@@ -35,6 +35,13 @@ import (
 	"github.com/zhiqiangxu/relay-patch/pkg/tools"
 )
 
+func CheckGasLimit(hash string, limit uint64) error {
+	if limit > 300000 {
+		return fmt.Errorf("Skipping poly tx %s for gas limit too high %d ", hash, limit)
+	}
+	return nil
+}
+
 // PolyToEth ...
 type PolyToEth struct {
 	polyToEthCh chan string
@@ -422,6 +429,12 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		gasLimit, err = client.EstimateGas(timerCtx, callMsg)
 		if err != nil {
 			log.Errorf("client.EstimateGas failed:%v polyTxHash:%s", err, polyTxHash)
+			return
+		}
+		// Check gas limit
+		gasLimit = uint64(float32(gasLimit) * 1.1)
+		if e := CheckGasLimit(polyTxHash, gasLimit); e != nil {
+			log.Errorf("Skipped poly tx %s for gas limit too high %v", polyTxHash, gasLimit)
 			return
 		}
 	}
