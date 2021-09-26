@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	poly_bridge_sdk "github.com/polynetwork/poly-bridge/bridgesdk"
 	"math/big"
 	"math/rand"
 	"os"
-	"poly_bridge_sdk"
 	"strings"
 	"time"
 
@@ -47,7 +47,7 @@ type PolyToEth struct {
 	polyToEthCh chan string
 	doneCh      chan struct{}
 	polySdk     *sdk.PolySdk
-	bridgeSdk   *poly_bridge_sdk.BridgeFeeCheck
+	bridgeSdk   *poly_bridge_sdk.BridgeSdk
 	clients     []*ethclient.Client
 	ethConfig   *config.EthConfig
 	polyConfig  *config.PolyConfig
@@ -58,7 +58,7 @@ type PolyToEth struct {
 	idx         int
 }
 
-func NewPolyToEth(polyToEthCh chan string, polySdk *sdk.PolySdk, bridgeSdk *poly_bridge_sdk.BridgeFeeCheck, clients []*ethclient.Client, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config, account accounts.Account, keyStore *tools.EthKeyStore) *PolyToEth {
+func NewPolyToEth(polyToEthCh chan string, polySdk *sdk.PolySdk, bridgeSdk *poly_bridge_sdk.BridgeSdk, clients []*ethclient.Client, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config, account accounts.Account, keyStore *tools.EthKeyStore) *PolyToEth {
 	return &PolyToEth{polyToEthCh: polyToEthCh, doneCh: make(chan struct{}), polySdk: polySdk, bridgeSdk: bridgeSdk, clients: clients, ethConfig: ethConfig, polyConfig: polyConfig, conf: conf, account: account, keyStore: keyStore}
 }
 
@@ -241,6 +241,9 @@ func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
 		case poly_bridge_sdk.STATE_HASPAY:
 			return true
 		case poly_bridge_sdk.STATE_NOTPAY:
+			return false
+		case poly_bridge_sdk.STATE_NOTPOLYPROXY:
+			log.Info("CheckFee STATE_NOTPOLYPROXY, TxHash:%s ", txHash)
 			return false
 		case poly_bridge_sdk.STATE_NOTCHECK:
 			log.Errorf("CheckFee STATE_NOTCHECK, TxHash:%s FromChainID:%d Poly Hash:%s, wait...", txHash, param.FromChainID, hex.EncodeToString(common1.ToArrayReverse(param.TxHash)))
