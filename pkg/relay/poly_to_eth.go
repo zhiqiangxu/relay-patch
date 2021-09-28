@@ -213,15 +213,13 @@ func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
 	if ctx.conf.CheckMerkleRoot {
 		return true
 	}
-	if ctx.conf.EthConfig.SideChainId != ctx.ethConfig.SideChainId && ctx.conf.BSCConfig.SideChainId != ctx.ethConfig.SideChainId {
-		return true
-	}
 	if ctx.conf.Force {
 		return true
 	}
 
 	txHash := hex.EncodeToString(param.MakeTxParam.TxHash)
 	req := &poly_bridge_sdk.CheckFeeReq{Hash: txHash, ChainId: param.FromChainID}
+	c := 0
 	for {
 		start := time.Now()
 		resp, err := ctx.bridgeSdk.CheckFee([]*poly_bridge_sdk.CheckFeeReq{req})
@@ -247,6 +245,10 @@ func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
 			return false
 		case poly_bridge_sdk.STATE_NOTCHECK:
 			log.Errorf("CheckFee STATE_NOTCHECK, TxHash:%s FromChainID:%d Poly Hash:%s, wait...", txHash, param.FromChainID, hex.EncodeToString(common1.ToArrayReverse(param.TxHash)))
+			if c >= 1 {
+				return false
+			}
+			c++
 			time.Sleep(time.Second)
 			continue
 		}
