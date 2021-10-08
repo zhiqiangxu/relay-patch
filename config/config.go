@@ -9,8 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var CONFIG *Config
-
 // Config ...
 type Config struct {
 	sync.Once
@@ -112,6 +110,5 @@ func LoadConfig(confFile string) (config *Config, err error) {
 
 	config = &Config{}
 	err = json.Unmarshal(jsonBytes, config)
-	CONFIG = config
 	return
 }

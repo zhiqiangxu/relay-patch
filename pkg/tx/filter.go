@@ -17,14 +17,16 @@ type Filter struct {
 	ethToPolyChs map[uint64]chan string
 	polyToEthChs map[uint64]chan string
 	doneCh       chan struct{}
+	conf         *config.Config
 }
 
 // NewFilter ...
 func NewFilter(
 	mysql *xorm.Engine,
 	ethToPolyChs map[uint64]chan string,
-	polyToEthChs map[uint64]chan string) *Filter {
-	return &Filter{mysql: mysql, ethToPolyChs: ethToPolyChs, polyToEthChs: polyToEthChs, doneCh: make(chan struct{})}
+	polyToEthChs map[uint64]chan string,
+	conf *config.Config) *Filter {
+	return &Filter{mysql: mysql, ethToPolyChs: ethToPolyChs, polyToEthChs: polyToEthChs, doneCh: make(chan struct{}), conf: conf}
 }
 
 // CrossTxInfo ...
@@ -139,7 +141,7 @@ WHERE a.chain_id = 10 AND (UNIX_TIMESTAMP() < a.time + ?)
   AND UNIX_TIMESTAMP()<a.time+86400`
 
 func (f *Filter) queryCrossTxInfo() (list []*CrossTxInfo, err error) {
-	days := config.CONFIG.FilterDays
+	days := f.conf.FilterDays
 	if days == 0 {
 		days = 3
 	}
