@@ -37,16 +37,17 @@ import (
 
 // EthToPoly ...
 type EthToPoly struct {
-	ethToPolyCh chan string
-	doneCh      chan struct{}
-	polySdk     *sdk.PolySdk
-	signer      *sdk.Account
-	clients     []*ethclient.Client
-	tmClients   []*oksdk.Client
-	ethConfig   *config.EthConfig
-	conf        *config.Config
-	idx         int
-	cdc         *cmcodec.Codec
+	ethToPolyCh    chan string
+	doneCh         chan struct{}
+	polySdk        *sdk.PolySdk
+	signer         *sdk.Account
+	clients        []*ethclient.Client
+	ethConfig      *config.EthConfig
+	conf           *config.Config
+	idx            int
+	skippedSenders map[common.Address]bool
+	tmClients      []*oksdk.Client
+	cdc            *cmcodec.Codec
 }
 
 func NewEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
@@ -55,11 +56,16 @@ func NewEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	tmClients []*oksdk.Client,
 	ethConfig *config.EthConfig,
 	conf *config.Config) *EthToPoly {
+	skippedSenders := map[common.Address]bool{}
+	for _, s := range conf.SkippedSenders {
+		skippedSenders[common.HexToAddress(s)] = true
+	}
+
 	var cdc *cmcodec.Codec
 	if conf.IsOK(ethConfig.SideChainId) {
 		cdc = codec.MakeCodec(app.ModuleBasics)
 	}
-	return &EthToPoly{ethToPolyCh: ethToPolyCh, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, tmClients: tmClients, ethConfig: ethConfig, conf: conf, cdc: cdc}
+	return &EthToPoly{ethToPolyCh: ethToPolyCh, doneCh: make(chan struct{}), polySdk: polySdk, signer: signer, clients: clients, tmClients: tmClients, ethConfig: ethConfig, conf: conf, cdc: cdc, skippedSenders: skippedSenders}
 }
 
 func (chain *EthToPoly) Start() {
@@ -130,6 +136,7 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 			}
 
 			param := &common2.MakeTxParam{}
+
 			err = param.Deserialization(common1.NewZeroCopySource([]byte(evt.Rawdata)))
 			if err != nil {
 				log.Fatalf("param.Deserialization failed:%v", err)
@@ -141,6 +148,11 @@ func (chain *EthToPoly) MonitorTx(ethTxHash string) (uint64, string) {
 			}
 			if chain.ethConfig.ShouldSkip(evt.Sender) {
 				log.Infof("sender %s is skipped", evt.Sender.Hex())
+				return param.ToChainID, ""
+			}
+
+			_, skipped := chain.skippedSenders[evt.Sender]
+			if skipped {
 				return param.ToChainID, ""
 			}
 

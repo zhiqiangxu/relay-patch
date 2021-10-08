@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	poly_bridge_sdk "github.com/polynetwork/poly-bridge/bridgesdk"
 	"math/big"
 	"math/rand"
 	"os"
-	"poly_bridge_sdk"
 	"strings"
 	"time"
 
@@ -35,12 +35,19 @@ import (
 	"github.com/zhiqiangxu/relay-patch/pkg/tools"
 )
 
+func CheckGasLimit(hash string, limit uint64) error {
+	if limit > 300000 {
+		return fmt.Errorf("Skipping poly tx %s for gas limit too high %d ", hash, limit)
+	}
+	return nil
+}
+
 // PolyToEth ...
 type PolyToEth struct {
 	polyToEthCh chan string
 	doneCh      chan struct{}
 	polySdk     *sdk.PolySdk
-	bridgeSdk   *poly_bridge_sdk.BridgeFeeCheck
+	bridgeSdk   *poly_bridge_sdk.BridgeSdk
 	clients     []*ethclient.Client
 	ethConfig   *config.EthConfig
 	polyConfig  *config.PolyConfig
@@ -51,7 +58,7 @@ type PolyToEth struct {
 	idx         int
 }
 
-func NewPolyToEth(polyToEthCh chan string, polySdk *sdk.PolySdk, bridgeSdk *poly_bridge_sdk.BridgeFeeCheck, clients []*ethclient.Client, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config, account accounts.Account, keyStore *tools.EthKeyStore) *PolyToEth {
+func NewPolyToEth(polyToEthCh chan string, polySdk *sdk.PolySdk, bridgeSdk *poly_bridge_sdk.BridgeSdk, clients []*ethclient.Client, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config, account accounts.Account, keyStore *tools.EthKeyStore) *PolyToEth {
 	return &PolyToEth{polyToEthCh: polyToEthCh, doneCh: make(chan struct{}), polySdk: polySdk, bridgeSdk: bridgeSdk, clients: clients, ethConfig: ethConfig, polyConfig: polyConfig, conf: conf, account: account, keyStore: keyStore}
 }
 
@@ -206,15 +213,13 @@ func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
 	if ctx.conf.CheckMerkleRoot {
 		return true
 	}
-	if ctx.conf.EthConfig.SideChainId != ctx.ethConfig.SideChainId && ctx.conf.BSCConfig.SideChainId != ctx.ethConfig.SideChainId {
-		return true
-	}
 	if ctx.conf.Force {
 		return true
 	}
 
 	txHash := hex.EncodeToString(param.MakeTxParam.TxHash)
 	req := &poly_bridge_sdk.CheckFeeReq{Hash: txHash, ChainId: param.FromChainID}
+	c := 0
 	for {
 		start := time.Now()
 		resp, err := ctx.bridgeSdk.CheckFee([]*poly_bridge_sdk.CheckFeeReq{req})
@@ -235,8 +240,15 @@ func (ctx *PolyToEth) isPaid(param *common2.ToMerkleValue) bool {
 			return true
 		case poly_bridge_sdk.STATE_NOTPAY:
 			return false
+		case poly_bridge_sdk.STATE_NOTPOLYPROXY:
+			log.Info("CheckFee STATE_NOTPOLYPROXY, TxHash:%s ", txHash)
+			return false
 		case poly_bridge_sdk.STATE_NOTCHECK:
 			log.Errorf("CheckFee STATE_NOTCHECK, TxHash:%s FromChainID:%d Poly Hash:%s, wait...", txHash, param.FromChainID, hex.EncodeToString(common1.ToArrayReverse(param.TxHash)))
+			if c >= 1 {
+				return false
+			}
+			c++
 			time.Sleep(time.Second)
 			continue
 		}
@@ -422,6 +434,12 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		gasLimit, err = client.EstimateGas(timerCtx, callMsg)
 		if err != nil {
 			log.Errorf("client.EstimateGas failed:%v polyTxHash:%s", err, polyTxHash)
+			return
+		}
+		// Check gas limit
+		gasLimit = uint64(float32(gasLimit) * 1.1)
+		if e := CheckGasLimit(polyTxHash, gasLimit); e != nil {
+			log.Errorf("Skipped poly tx %s for gas limit too high %v", polyTxHash, gasLimit)
 			return
 		}
 	}

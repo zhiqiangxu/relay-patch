@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"poly_bridge_sdk"
-
 	"github.com/ethereum/go-ethereum/ethclient"
 	oksdk "github.com/okex/exchain-go-sdk"
 	"github.com/oklog/run"
+	poly_bridge_sdk "github.com/polynetwork/poly-bridge/bridgesdk"
 	sdk "github.com/polynetwork/poly-go-sdk"
 	"github.com/zhiqiangxu/relay-patch/config"
 	"github.com/zhiqiangxu/relay-patch/pkg/log"
@@ -86,7 +85,7 @@ func setUpEthToPoly(ethToPolyCh chan string, polySdk *sdk.PolySdk,
 	return workers
 }
 
-func setUpPolyToEth(clients []*ethclient.Client, ks *tools.EthKeyStore, polyToEthWorkCh chan string, polySdk *sdk.PolySdk, bridgeSdk *poly_bridge_sdk.BridgeFeeCheck, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config) []*relay.PolyToEth {
+func setUpPolyToEth(clients []*ethclient.Client, ks *tools.EthKeyStore, polyToEthWorkCh chan string, polySdk *sdk.PolySdk, bridgeSdk *poly_bridge_sdk.BridgeSdk, ethConfig *config.EthConfig, polyConfig *config.PolyConfig, conf *config.Config) []*relay.PolyToEth {
 
 	var workers []*relay.PolyToEth
 	for _, account := range ks.GetAccounts() {
@@ -180,7 +179,7 @@ func main() {
 	polyToEthChs := make(map[uint64]chan string)
 	eth2PolyWorkers := make(map[uint64][]*relay.EthToPoly)
 	polyToEthWorkers := make(map[uint64][]*relay.PolyToEth)
-	bridgeSdk := poly_bridge_sdk.NewBridgeFeeCheck(conf.BridgeConfig.RestURL, 5)
+	bridgeSdk := poly_bridge_sdk.NewBridgeSdk(conf.BridgeConfig.RestURL[0][0])
 	for _, chainID := range chainIDs {
 		ethToPolyChs[chainID] = make(chan string)
 		polyToEthChs[chainID] = make(chan string)
