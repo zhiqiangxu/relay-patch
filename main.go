@@ -186,12 +186,12 @@ func main() {
 	for _, chainID := range chainIDs {
 		polyToEthChs[chainID] = make(chan string)
 		ethConf := idToEthConf(chainID, conf)
+		if ethConf == nil {
+			continue
+		}
 		// if eccd is empty, means no eth->poly worker is needed
 		if ethConf.ECCDContractAddress != "" {
 			ethToPolyChs[chainID] = make(chan string)
-		}
-		if ethConf == nil {
-			continue
 		}
 		clients, tmClients, ks := setUpEthClientAndKeyStore(ethConf)
 
