@@ -19,11 +19,12 @@ type Config struct {
 	EthConfig        EthConfig
 	HecoConfig       EthConfig
 	OKConfig         EthConfig
+	BorConfig        EthConfig
+	ArbConfig        EthConfig
 	BridgeConfig     BridgeConfig
 	GasPrice         *big.Int
 	Print            bool
 	SkippedSenders   []string
-	BorConfig        EthConfig
 	WhitelistMethods []string
 	Force            bool
 	CheckMerkleRoot  bool

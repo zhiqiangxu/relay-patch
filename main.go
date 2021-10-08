@@ -113,6 +113,8 @@ func idToEthConf(id uint64, conf *config.Config) *config.EthConfig {
 		return &conf.OKConfig
 	case conf.BorConfig.SideChainId:
 		return &conf.BorConfig
+	case conf.ArbConfig.SideChainId:
+		return &conf.ArbConfig
 	default:
 		panic(fmt.Sprintf("unkown chain id:%d", id))
 	}
@@ -173,6 +175,7 @@ func main() {
 		conf.EthConfig.SideChainId,
 		conf.OKConfig.SideChainId,
 		conf.BorConfig.SideChainId,
+		conf.ArbConfig.SideChainId,
 	}
 
 	ethToPolyChs := make(map[uint64]chan string)
@@ -181,14 +184,21 @@ func main() {
 	polyToEthWorkers := make(map[uint64][]*relay.PolyToEth)
 	bridgeSdk := poly_bridge_sdk.NewBridgeSdk(conf.BridgeConfig.RestURL[0][0])
 	for _, chainID := range chainIDs {
-		ethToPolyChs[chainID] = make(chan string)
 		polyToEthChs[chainID] = make(chan string)
 		ethConf := idToEthConf(chainID, conf)
+		// if eccd is empty, means no eth->poly worker is needed
+		if ethConf.ECCDContractAddress != "" {
+			ethToPolyChs[chainID] = make(chan string)
+		}
 		if ethConf == nil {
 			continue
 		}
 		clients, tmClients, ks := setUpEthClientAndKeyStore(ethConf)
-		eth2PolyWorkers[chainID] = setUpEthToPoly(ethToPolyChs[chainID], polySdk, signer, clients, tmClients, ethConf, conf)
+
+		if ethToPolyChs[chainID] != nil {
+			eth2PolyWorkers[chainID] = setUpEthToPoly(ethToPolyChs[chainID], polySdk, signer, clients, tmClients, ethConf, conf)
+		}
+
 		polyToEthWorkers[chainID] = setUpPolyToEth(clients, ks, polyToEthChs[chainID], polySdk, bridgeSdk, ethConf, &conf.PolyConfig, conf)
 	}
 
@@ -263,7 +273,7 @@ func main() {
 		log.Fatalf("storage.NewMySQL failed:%v", err)
 	}
 
-	filter := txPkg.NewFilter(mysql, ethToPolyChs, polyToEthChs)
+	filter := txPkg.NewFilter(mysql, ethToPolyChs, polyToEthChs, conf)
 
 	var g run.Group
 
