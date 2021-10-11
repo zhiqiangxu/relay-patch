@@ -117,7 +117,7 @@ WHERE b.status!=0 AND (UNIX_TIMESTAMP() < a.time + ?)
          OR (a.chain_id in (2, 17)
              AND c.hash IS NULL
              AND UNIX_TIMESTAMP()>a.time+600)
-         OR (a.dst_chain_id=2
+         OR (a.dst_chain_id in (2, 19)
              AND c.hash IS NOT NULL
              AND UNIX_TIMESTAMP()>c.time+600),TRUE, FALSE)
 UNION ALL
@@ -136,9 +136,8 @@ WHERE a.chain_id = 10 AND (UNIX_TIMESTAMP() < a.time + ?)
              AND c.hash IS NULL
              AND ((a.dst_chain_id in (6, 7, 10, 12, 17)
                    AND UNIX_TIMESTAMP()>b.time+180)
-                  OR (a.dst_chain_id=2
-                      AND UNIX_TIMESTAMP()>b.time+600))),TRUE, FALSE)
-  AND UNIX_TIMESTAMP()<a.time+86400`
+                  OR (a.dst_chain_id in (2, 19) 
+                      AND UNIX_TIMESTAMP()>b.time+600))),TRUE, FALSE)`
 
 func (f *Filter) queryCrossTxInfo() (list []*CrossTxInfo, err error) {
 	days := f.conf.FilterDays
