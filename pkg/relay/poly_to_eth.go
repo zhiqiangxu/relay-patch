@@ -36,13 +36,6 @@ import (
 	"github.com/zhiqiangxu/relay-patch/pkg/tools"
 )
 
-func CheckGasLimit(hash string, limit uint64) error {
-	if limit > 300000 {
-		return fmt.Errorf("Skipping poly tx %s for gas limit too high %d ", hash, limit)
-	}
-	return nil
-}
-
 // PolyToEth ...
 type PolyToEth struct {
 	polyToEthCh chan string
@@ -65,6 +58,19 @@ func NewPolyToEth(polyToEthCh chan string, polySdk *sdk.PolySdk, bridgeSdk *poly
 
 func randIdx(size int) int {
 	return int(rand.Uint32()) % size
+}
+
+func (ctx *PolyToEth) checkGasLimit(hash string, limit uint64) error {
+	if ctx.ethConfig.SideChainId == ctx.conf.ArbConfig.SideChainId {
+		if limit > 3600000 {
+			return fmt.Errorf("Skipping poly tx %s for gas limit too high %d ", hash, limit)
+		}
+		return nil
+	}
+	if limit > 300000 {
+		return fmt.Errorf("Skipping poly tx %s for gas limit too high %d ", hash, limit)
+	}
+	return nil
 }
 
 func (ctx *PolyToEth) getNonce() uint64 {
@@ -439,7 +445,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 		}
 		// Check gas limit
 		gasLimit = uint64(float32(gasLimit) * 1.1)
-		if e := CheckGasLimit(polyTxHash, gasLimit); e != nil {
+		if e := ctx.checkGasLimit(polyTxHash, gasLimit); e != nil {
 			log.Errorf("Skipped poly tx %s for gas limit too high %v", polyTxHash, gasLimit)
 			return
 		}
