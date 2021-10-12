@@ -82,6 +82,7 @@ type EthConfig struct {
 	TMRestURL           []string
 	ECCMContractAddress string
 	ECCDContractAddress string
+	OnlyDst             bool
 	KeyStorePath        string
 	KeyStorePwdSet      map[string]string
 	BlockConfig         uint64

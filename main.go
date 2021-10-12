@@ -189,8 +189,7 @@ func main() {
 		if ethConf == nil {
 			continue
 		}
-		// if eccd is empty, means no eth->poly worker is needed
-		if ethConf.ECCDContractAddress != "" {
+		if !ethConf.OnlyDst {
 			ethToPolyChs[chainID] = make(chan string)
 		}
 		clients, tmClients, ks := setUpEthClientAndKeyStore(ethConf)
