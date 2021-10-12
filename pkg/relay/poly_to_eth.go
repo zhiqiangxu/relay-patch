@@ -6,12 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	poly_bridge_sdk "github.com/polynetwork/poly-bridge/bridgesdk"
 	"math/big"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
+
+	poly_bridge_sdk "github.com/polynetwork/poly-bridge/bridgesdk"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -414,7 +415,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	if gasPrice == nil {
 		gasPrice, err = client.SuggestGasPrice(timerCtx)
 		if err != nil {
-			log.Fatalf("client.SuggestGasPrice failed:%v", err)
+			log.Fatalf("client.SuggestGasPrice failed:%v chain:%d", err, ctx.ethConfig.SideChainId)
 		}
 		if !ctx.conf.IsEth(ctx.ethConfig.SideChainId) {
 			gasPrice = big.NewInt(0).Quo(big.NewInt(0).Mul(gasPrice, big.NewInt(12)), big.NewInt(10))
