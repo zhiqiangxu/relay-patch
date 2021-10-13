@@ -62,7 +62,7 @@ func randIdx(size int) int {
 
 func (ctx *PolyToEth) checkGasLimit(hash string, limit uint64) error {
 	if ctx.ethConfig.SideChainId == ctx.conf.ArbConfig.SideChainId {
-		if limit > 3600000 {
+		if limit > 4000000 {
 			return fmt.Errorf("Skipping poly tx %s for gas limit too high %d ", hash, limit)
 		}
 		return nil
@@ -204,7 +204,16 @@ func (ctx *PolyToEth) getTxData(polyTxHash string) []byte {
 	}
 
 	if ctx.conf.Print {
-		log.Infof("FromChainID:%d ToChainID:%d method:%s args:%s", merkleValue.FromChainID, merkleValue.MakeTxParam.ToChainID, merkleValue.MakeTxParam.Method, hex.EncodeToString(merkleValue.MakeTxParam.Args))
+		sink := common1.NewZeroCopySink(nil)
+		merkleValue.MakeTxParam.Serialization(sink)
+		log.Infof(
+			"FromChainID:%d ToChainID:%d method:%s args:%s MakeTxParam:%s",
+			merkleValue.FromChainID,
+			merkleValue.MakeTxParam.ToChainID,
+			merkleValue.MakeTxParam.Method,
+			hex.EncodeToString(merkleValue.MakeTxParam.Args),
+			hex.EncodeToString(sink.Bytes()),
+		)
 		os.Exit(1)
 	}
 	if !ctx.isPaid(merkleValue) {
@@ -397,7 +406,12 @@ func (ctx *PolyToEth) makeTx(header *polytypes.Header, param *common2.ToMerkleVa
 	return txData
 }
 
-const hardCodedGasLimit uint64 = 500000
+func (ctx *PolyToEth) forceLimit() uint64 {
+	if ctx.ethConfig.SideChainId == ctx.conf.ArbConfig.SideChainId {
+		return 4000000
+	}
+	return 500000
+}
 
 func (ctx *PolyToEth) SendTx(polyTxHash string) {
 	log.Infof("SendTx %s ToChainID %d", polyTxHash, ctx.ethConfig.SideChainId)
@@ -436,7 +450,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 
 	var gasLimit uint64
 	if ctx.conf.Force {
-		gasLimit = hardCodedGasLimit
+		gasLimit = ctx.forceLimit()
 	} else {
 		gasLimit, err = client.EstimateGas(timerCtx, callMsg)
 		if err != nil {
@@ -459,7 +473,7 @@ func (ctx *PolyToEth) SendTx(polyTxHash string) {
 
 	hash, err := ctx.sendTxAndReturnHash(timerCtx, signedtx)
 	if err != nil {
-		log.Errorf("sendTxAndReturnHash failed:%v account:%s gasPrice:%d idx:%d", err, ctx.account.Address.Hex(), gasPrice.Int64(), idx)
+		log.Errorf("sendTxAndReturnHash failed:%v account:%s gasPrice:%d gasLimit:%d idx:%d", err, ctx.account.Address.Hex(), gasPrice.Int64(), gasLimit, idx)
 		time.Sleep(time.Second * 1)
 		return
 	}
